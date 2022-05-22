@@ -1,5 +1,7 @@
 # sqlite-rest
 
+This is an EXPERIMENT project.
+
 ## Usgae
 
 ### Migration
