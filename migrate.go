@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -131,7 +132,14 @@ func (m *dbMigrator) Up(ctx context.Context) error {
 	logger := m.logger.WithName("up")
 	logger.Info("applying operation")
 
-	if err := m.migrator.Up(); err != nil {
+	err := m.migrator.Up()
+	if errors.Is(err, migrate.ErrNoChange) {
+		// no update
+		err = nil
+		logger.V(8).Info("no pending migrations")
+	}
+	if err != nil {
+
 		logger.Error(err, "failed to apply operation")
 		return fmt.Errorf("up: %w", err)
 	}
