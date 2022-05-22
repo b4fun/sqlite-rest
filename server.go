@@ -77,10 +77,13 @@ func NewServer(opts *ServerOptions) (*dbServer, error) {
 		routePattern := fmt.Sprintf("/{%s:[^/]+}", routeVarTableOrView)
 		serverMux.
 			HandleFunc(routePattern, rv.handleQueryTableOrView).
-			Methods("GET")
+			Methods(http.MethodGet)
 		serverMux.
-			HandleFunc(routePattern, rv.handleInsertTableOrView).
-			Methods("POST")
+			HandleFunc(routePattern, rv.handleInsertTable).
+			Methods(http.MethodPost)
+		serverMux.
+			HandleFunc(routePattern, rv.handleUpdateTable).
+			Methods(http.MethodPatch)
 		// TODO: upsert / delete
 	}
 
@@ -122,6 +125,10 @@ func (server *dbServer) responseData(w http.ResponseWriter, data interface{}, st
 		w.WriteHeader(http.StatusCreated)
 		return
 	}
+}
+
+func (server *dbServer) responseEmptyBody(w http.ResponseWriter, statusCode int) {
+	w.WriteHeader(statusCode)
 }
 
 func (server *dbServer) handleQueryTableOrView(
@@ -166,14 +173,14 @@ func (server *dbServer) handleQueryTableOrView(
 	server.responseData(w, rv, http.StatusOK)
 }
 
-func (server *dbServer) handleInsertTableOrView(
+func (server *dbServer) handleInsertTable(
 	w http.ResponseWriter,
 	req *http.Request,
 ) {
 	vars := mux.Vars(req)
 	target := vars[routeVarTableOrView]
 
-	logger := server.logger.WithValues("target", target, "route", "handleInsertTableOrView")
+	logger := server.logger.WithValues("target", target, "route", "handleInsertTable")
 
 	qc := &queryCompiler{req: req}
 	insertStmt, err := qc.CompileAsInsert(target)
@@ -191,7 +198,36 @@ func (server *dbServer) handleInsertTableOrView(
 	}
 
 	// TODO: implement support for retrieving object by inserted id
-	server.responseData(w, nil, http.StatusCreated)
+	server.responseEmptyBody(w, http.StatusCreated)
+}
+
+func (server *dbServer) handleUpdateTable(
+	w http.ResponseWriter,
+	req *http.Request,
+) {
+	vars := mux.Vars(req)
+	target := vars[routeVarTableOrView]
+
+	logger := server.logger.WithValues("target", target, "route", "handleUpdateTable")
+
+	qc := &queryCompiler{req: req}
+	updateStmt, err := qc.CompileAsUpdate(target)
+	if err != nil {
+		logger.Error(err, "parse insert query")
+		server.responseError(w, err)
+		return
+	}
+	logger.V(8).Info(updateStmt.Query)
+
+	_, err = server.execer.ExecContext(req.Context(), updateStmt.Query, updateStmt.Values...)
+	if err != nil {
+		server.responseError(w, err)
+		return
+	}
+
+	// TODO: implement support for retrieving object by inserted id
+	server.responseEmptyBody(w, http.StatusAccepted)
+
 }
 
 const queryParameterNameSelect = "select"
@@ -307,6 +343,43 @@ func (c *queryCompiler) CompileAsSelect(table string) (CompiledQuery, error) {
 
 func (c *queryCompiler) CompileAsUpdate(table string) (CompiledQuery, error) {
 	rv := CompiledQuery{}
+
+	payload, err := c.GetInputPayload()
+	if err != nil {
+		return rv, err
+	}
+	if len(payload.Columns) < 1 {
+		return rv, ErrBadRequest.WithHints("no columns to insert")
+	}
+	if len(payload.Payload) < 1 {
+		return rv, ErrBadRequest.WithHints("no data to insert")
+	}
+	if len(payload.Payload) > 1 {
+		return rv, ErrBadRequest.WithHints("too many data to update")
+	}
+
+	columns := payload.GetSortedColumns()
+	updateValues := payload.Payload[0]
+	var columnPlaceholders []string
+	for _, column := range columns {
+		columnPlaceholders = append(columnPlaceholders, fmt.Sprintf("%s = ?", column))
+		rv.Values = append(rv.Values, updateValues[column])
+	}
+
+	rv.Query = fmt.Sprintf(
+		"update %s set %s",
+		table,
+		strings.Join(columnPlaceholders, ", "),
+	)
+
+	var qcs []string
+	for _, qc := range c.GetQueryClauses() {
+		qcs = append(qcs, qc.Expr)
+		rv.Values = append(rv.Values, qc.Values...)
+	}
+	if len(qcs) > 0 {
+		rv.Query = fmt.Sprintf("%s where %s", rv.Query, strings.Join(qcs, " and "))
+	}
 
 	return rv, nil
 }
