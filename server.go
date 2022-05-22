@@ -9,12 +9,9 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/go-logr/zapr"
 	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/cobra"
-	"go.uber.org/zap"
 )
 
 const (
@@ -324,27 +321,20 @@ func (c *queryCompiler) getQueryClausesByInput(column string, s string) []Compil
 
 func createServeCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "serve",
-		SilenceUsage: true,
+		Use:           "serve",
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			dsn, err := cmd.Flags().GetString(cliFlagDBDSN)
+			logger, err := createLogger(cmd)
 			if err != nil {
+				setupLogger.Error(err, "failed to create logger")
 				return err
 			}
 
-			db, err := sqlx.Open("sqlite3", dsn)
+			db, err := openDB(cmd)
 			if err != nil {
+				setupLogger.Error(err, "failed to open db")
 				return err
-			}
-			defer db.Close()
-
-			var logger logr.Logger
-			{
-				zapLog, err := zap.NewDevelopment()
-				if err != nil {
-					return err
-				}
-				logger = zapr.NewLogger(zapLog)
 			}
 
 			opts := &ServerOptions{
