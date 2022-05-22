@@ -143,7 +143,8 @@ func (server *dbServer) handleQueryTableOrView(
 	}
 	defer rows.Close()
 
-	var rv []map[string]interface{}
+	// make sure return list instead of null for empty list
+	rv := make([]map[string]interface{}, 0)
 	for rows.Next() {
 		p := make(map[string]interface{})
 		if err := rows.MapScan(p); err != nil {
@@ -336,6 +337,7 @@ func createServeCmd() *cobra.Command {
 				setupLogger.Error(err, "failed to open db")
 				return err
 			}
+			defer db.Close()
 
 			opts := &ServerOptions{
 				Logger:  logger,
@@ -345,11 +347,13 @@ func createServeCmd() *cobra.Command {
 
 			server, err := NewServer(opts)
 			if err != nil {
+				setupLogger.Error(err, "failed to create server")
 				return err
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
+
 			server.Start(ctx.Done())
 
 			return nil
