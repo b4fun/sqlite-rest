@@ -17,6 +17,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 const (
@@ -30,13 +31,17 @@ type ServerOptions struct {
 	Execer  sqlx.ExecerContext
 }
 
+func (opts *ServerOptions) bindCLIFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&opts.Addr, "http-addr", ":8080", "server listen addr")
+}
+
 func (opts *ServerOptions) defaults() error {
 	if opts.Logger.GetSink() == nil {
 		opts.Logger = logr.Discard()
 	}
 
 	if opts.Addr == "" {
-		opts.Addr = "127.0.0.1:8080"
+		opts.Addr = ":8080"
 	}
 
 	if opts.Queryer == nil {
@@ -581,6 +586,8 @@ func (c *queryCompiler) readyRequestBody() ([]byte, error) {
 }
 
 func createServeCmd() *cobra.Command {
+	serverOpts := new(ServerOptions)
+
 	cmd := &cobra.Command{
 		Use:           "serve",
 		SilenceUsage:  true,
@@ -599,13 +606,11 @@ func createServeCmd() *cobra.Command {
 			}
 			defer db.Close()
 
-			opts := &ServerOptions{
-				Logger:  logger,
-				Queryer: db,
-				Execer:  db,
-			}
+			serverOpts.Logger = logger
+			serverOpts.Queryer = db
+			serverOpts.Execer = db
 
-			server, err := NewServer(opts)
+			server, err := NewServer(serverOpts)
 			if err != nil {
 				setupLogger.Error(err, "failed to create server")
 				return err
@@ -619,6 +624,7 @@ func createServeCmd() *cobra.Command {
 			return nil
 		},
 	}
+	serverOpts.bindCLIFlags(cmd.Flags())
 
 	return cmd
 }

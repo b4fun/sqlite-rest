@@ -44,5 +44,5 @@ build-image-server: ## Build server docker image.
 		-f Dockerfile.server \
 		-t ${IMG_PREFIX}/server:${IMG_TAG} .
 
-image-push: ## Push docker images.
+push-image: ## Push docker images.
 	${DOCKER_CMD} push ${IMG_PREFIX}/server:${IMG_TAG}
