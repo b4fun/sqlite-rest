@@ -13,3 +13,7 @@ $ sqlite-rest migrate ./migrates
 ```
 $ sqlite-rest serve
 ```
+
+## License
+
+MIT
