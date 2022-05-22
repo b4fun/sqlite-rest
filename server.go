@@ -87,8 +87,10 @@ func NewServer(opts *ServerOptions) (*dbServer, error) {
 func (server *dbServer) Start(done <-chan struct{}) {
 	go server.server.ListenAndServe()
 
+	server.logger.Info("server started", "addr", server.server.Addr)
 	<-done
 
+	server.logger.Info("shutting down server")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	server.server.Shutdown(shutdownCtx)
