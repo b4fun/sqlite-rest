@@ -1,10 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"mime"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -74,7 +79,7 @@ func NewServer(opts *ServerOptions) (*dbServer, error) {
 			HandleFunc(routePattern, rv.handleQueryTableOrView).
 			Methods("GET")
 		serverMux.
-			HandleFunc(routePattern, rv.handleMutateTableOrView).
+			HandleFunc(routePattern, rv.handleInsertTableOrView).
 			Methods("POST")
 		// TODO: upsert / delete
 	}
@@ -96,15 +101,15 @@ func (server *dbServer) Start(done <-chan struct{}) {
 	server.server.Shutdown(shutdownCtx)
 }
 
-type errorResponse struct {
-	Message string `json:"message,omitempty"`
-	Hints   string `json:"hints,omitempty"`
-}
-
 func (server *dbServer) responseError(w http.ResponseWriter, err error) {
-	// TODO: reflect error for status
-	resp := &errorResponse{Message: err.Error()}
-	server.responseData(w, resp, 500)
+	var serverError *ServerError
+	switch {
+	case errors.As(err, &serverError):
+		server.responseData(w, serverError, serverError.StatusCode)
+	default:
+		resp := &ServerError{Message: err.Error()}
+		server.responseData(w, resp, http.StatusInternalServerError)
+	}
 }
 
 func (server *dbServer) responseData(w http.ResponseWriter, data interface{}, statusCode int) {
@@ -114,7 +119,7 @@ func (server *dbServer) responseData(w http.ResponseWriter, data interface{}, st
 	enc.SetIndent("", " ")
 	if encodeErr := enc.Encode(data); encodeErr != nil {
 		server.logger.Error(encodeErr, "failed to write response")
-		w.WriteHeader(500)
+		w.WriteHeader(http.StatusCreated)
 		return
 	}
 }
@@ -126,14 +131,15 @@ func (server *dbServer) handleQueryTableOrView(
 	vars := mux.Vars(req)
 	target := vars[routeVarTableOrView]
 
-	logger := server.logger.WithValues("target", target)
-
-	logger.Info("handleQueryTableOrView")
-
-	// `select [] from [] where [] order by [] limit 10 offset 20`,
+	logger := server.logger.WithValues("target", target, "route", "handleQueryTableOrView")
 
 	qc := &queryCompiler{req: req}
-	selectStmt := qc.CompileAsSelect(target)
+	selectStmt, err := qc.CompileAsSelect(target)
+	if err != nil {
+		logger.Error(err, "parse select query")
+		server.responseError(w, err)
+		return
+	}
 	logger.V(8).Info(selectStmt.Query)
 
 	rows, err := server.queryer.QueryxContext(req.Context(), selectStmt.Query, selectStmt.Values...)
@@ -144,7 +150,9 @@ func (server *dbServer) handleQueryTableOrView(
 	defer rows.Close()
 
 	// make sure return list instead of null for empty list
+	// FIXME: reflect column type and scan typed value instead of using `interface{}`
 	rv := make([]map[string]interface{}, 0)
+	rows.ColumnTypes()
 	for rows.Next() {
 		p := make(map[string]interface{})
 		if err := rows.MapScan(p); err != nil {
@@ -155,14 +163,35 @@ func (server *dbServer) handleQueryTableOrView(
 	}
 
 	w.Header().Set("Content-Type", "application/json") // TODO: horner request config
-	server.responseData(w, rv, 200)
+	server.responseData(w, rv, http.StatusOK)
 }
 
-func (server *dbServer) handleMutateTableOrView(
+func (server *dbServer) handleInsertTableOrView(
 	w http.ResponseWriter,
 	req *http.Request,
 ) {
-	server.logger.Info("handleMutateTableOrView")
+	vars := mux.Vars(req)
+	target := vars[routeVarTableOrView]
+
+	logger := server.logger.WithValues("target", target, "route", "handleInsertTableOrView")
+
+	qc := &queryCompiler{req: req}
+	insertStmt, err := qc.CompileAsInsert(target)
+	if err != nil {
+		logger.Error(err, "parse insert query")
+		server.responseError(w, err)
+		return
+	}
+	logger.V(8).Info(insertStmt.Query)
+
+	_, err = server.execer.ExecContext(req.Context(), insertStmt.Query, insertStmt.Values...)
+	if err != nil {
+		server.responseError(w, err)
+		return
+	}
+
+	// TODO: implement support for retrieving object by inserted id
+	server.responseData(w, nil, http.StatusCreated)
 }
 
 const queryParameterNameSelect = "select"
@@ -203,6 +232,38 @@ var queryOpereators = map[string]queryOpereatorUserInputParseFunc{
 	// "in": "in", // TODO: support query operator parser
 }
 
+type InputPayloadWithColumns struct {
+	Columns map[string]struct{}
+	Payload []map[string]interface{}
+}
+
+func (p InputPayloadWithColumns) GetSortedColumns() []string {
+	columns := make([]string, 0, len(p.Columns))
+	for column := range p.Columns {
+		columns = append(columns, column)
+	}
+	sort.Strings(columns)
+	return columns
+}
+
+func (p InputPayloadWithColumns) GetValues(columns []string) [][]interface{} {
+	var rv [][]interface{}
+	for _, p := range p.Payload {
+		var row []interface{}
+		for _, column := range columns {
+			v, exists := p[column]
+			if exists {
+				row = append(row, v)
+			} else {
+				row = append(row, nil)
+			}
+		}
+		rv = append(rv, row)
+	}
+
+	return rv
+}
+
 type queryCompiler struct {
 	req *http.Request
 }
@@ -223,7 +284,7 @@ func (c *queryCompiler) getQueryParameter(name string) string {
 	return qp.Get(name)
 }
 
-func (c *queryCompiler) CompileAsSelect(table string) CompiledQuery {
+func (c *queryCompiler) CompileAsSelect(table string) (CompiledQuery, error) {
 	rv := CompiledQuery{}
 
 	rv.Query = fmt.Sprintf(
@@ -241,7 +302,52 @@ func (c *queryCompiler) CompileAsSelect(table string) CompiledQuery {
 		rv.Query = fmt.Sprintf("%s where %s", rv.Query, strings.Join(qcs, " and "))
 	}
 
-	return rv
+	return rv, nil
+}
+
+func (c *queryCompiler) CompileAsUpdate(table string) (CompiledQuery, error) {
+	rv := CompiledQuery{}
+
+	return rv, nil
+}
+
+func (c *queryCompiler) CompileAsInsert(table string) (CompiledQuery, error) {
+	rv := CompiledQuery{}
+
+	payload, err := c.GetInputPayload()
+	if err != nil {
+		return rv, err
+	}
+	if len(payload.Columns) < 1 {
+		return rv, ErrBadRequest.WithHints("no columns to insert")
+	}
+	if len(payload.Payload) < 1 {
+		return rv, ErrBadRequest.WithHints("no data to insert")
+	}
+
+	columns := payload.GetSortedColumns()
+
+	values := payload.GetValues(columns)
+	var valuePlaceholders []string
+	for range values {
+		valuePlaceholders = append(
+			valuePlaceholders,
+			fmt.Sprintf("(%s?)", strings.Repeat("?, ", len(columns)-1)),
+		)
+	}
+
+	rv.Query = fmt.Sprintf(
+		`insert into %s (%s) values %s`,
+		table,
+		strings.Join(columns, ", "),
+		strings.Join(valuePlaceholders, ", "),
+	)
+
+	for _, v := range values {
+		rv.Values = append(rv.Values, v...)
+	}
+
+	return rv, nil
 }
 
 func (c *queryCompiler) GetSelectResultColumns() []string {
@@ -318,6 +424,87 @@ func (c *queryCompiler) getQueryClausesByInput(column string, s string) []Compil
 	}
 
 	return nil
+}
+
+func (c *queryCompiler) GetInputPayload() (InputPayloadWithColumns, error) {
+	contentType := c.req.Header.Get("content-type")
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	for _, v := range strings.Split(contentType, ",") {
+		mt, _, err := mime.ParseMediaType(v)
+		if err != nil {
+			continue
+		}
+
+		switch strings.ToLower(mt) {
+		case "application/json":
+			payload, err := c.tryReadInputPayloadAsJSON()
+			if err != nil {
+				continue
+			}
+			return payload, nil
+		default:
+			continue
+		}
+	}
+
+	return InputPayloadWithColumns{}, ErrUnsupportedMediaType
+}
+
+func (c *queryCompiler) tryReadInputPayloadAsJSON() (InputPayloadWithColumns, error) {
+	rv := InputPayloadWithColumns{
+		Columns: map[string]struct{}{},
+	}
+
+	body, err := c.readyRequestBody()
+	if err != nil {
+		return rv, err
+	}
+
+	// TODO: we need a Peek method from json.Decoder
+	enc := json.NewDecoder(bytes.NewBuffer(body))
+	tok, err := enc.Token()
+	if err != nil {
+		return rv, err
+	}
+	switch tok {
+	case json.Delim('['):
+		// a json array
+		var ps []map[string]interface{}
+		if err := json.Unmarshal(body, &ps); err != nil {
+			return rv, err
+		}
+		rv.Payload = append(rv.Payload, ps...)
+	default:
+		// try as single object
+		var p map[string]interface{}
+		if err := json.Unmarshal(body, &p); err != nil {
+			return rv, err
+		}
+		rv.Payload = append(rv.Payload, p)
+	}
+
+	for _, p := range rv.Payload {
+		for k := range p {
+			rv.Columns[k] = struct{}{}
+		}
+	}
+
+	return rv, nil
+}
+
+func (c *queryCompiler) readyRequestBody() ([]byte, error) {
+	source := c.req.Body
+	defer source.Close()
+	b, err := io.ReadAll(source)
+	if err != nil {
+		return nil, fmt.Errorf("read request body: %w", err)
+	}
+	c.req.Body = io.NopCloser(bytes.NewBuffer(b))
+
+	return b, nil
 }
 
 func createServeCmd() *cobra.Command {
