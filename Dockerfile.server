@@ -1,0 +1,23 @@
+FROM golang:1.18 as builder
+
+WORKDIR /workspace
+# Copy the Go Modules manifests
+COPY go.mod go.mod
+COPY go.sum go.sum
+# cache deps before building and copying source so that we don't need to re-download as much
+# and so that source changes don't invalidate our downloaded layer
+RUN go mod download
+
+COPY . .
+
+# Build
+RUN GOOS=linux CGO_ENABLED=1 GOARCH=amd64 \
+    go build -v -x -o bin/sqlite-rest-server ./
+
+FROM docker.io/library/debian:stable-slim
+
+RUN mkdir -p /workspace
+
+WORKDIR /workspace
+
+COPY --from=builder /workspace/bin/sqlite-rest-server /bin/sqlite-rest-server

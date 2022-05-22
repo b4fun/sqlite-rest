@@ -1,0 +1,6 @@
+bin/
+
+data/
+*.sqlite3
+*-shm
+*-wal

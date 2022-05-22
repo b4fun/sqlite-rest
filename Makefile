@@ -29,3 +29,20 @@ run-server: fmt vet ## Run server.
 
 run-migrate: fmt vet ## Run migration.
 	go run *.go migrate --db-dsn ./test.sqlite3?_journal_mode=WAL --log-devel --log-level 12 ./data
+
+##@ Build
+
+DOCKER_CMD ?= docker
+IMG_TAG ?= latest
+IMG_PREFIX ?= ghcr.io/b4fun/sqlite-rest
+IMG_BUILD_OPTS ?= --platform=linux/amd64
+
+build-image: build-image-server ## Build docker images.
+
+build-image-server: ## Build server docker image.
+	${DOCKER_CMD} build ${IMG_BUILD_OPTS} \
+		-f Dockerfile.server \
+		-t ${IMG_PREFIX}/server:${IMG_TAG} .
+
+image-push: ## Push docker images.
+	${DOCKER_CMD} push ${IMG_PREFIX}/server:${IMG_TAG}
