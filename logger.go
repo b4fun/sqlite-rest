@@ -13,7 +13,9 @@ import (
 var setupLogger logr.Logger = logr.Discard()
 
 func init() {
-	zapLog, err := zap.NewDevelopment()
+	zapConfig := zap.NewDevelopmentConfig()
+	zapConfig.Level = zap.NewAtomicLevelAt(zapcore.Level(-12))
+	zapLog, err := zapConfig.Build()
 	if err != nil {
 		panic(err)
 	}

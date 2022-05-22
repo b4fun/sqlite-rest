@@ -14,9 +14,8 @@ const (
 
 func createMainCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:           "sqlite-rest",
-		SilenceUsage:  true,
-		SilenceErrors: true,
+		Use:          "sqlite-rest",
+		SilenceUsage: true,
 	}
 
 	cmd.PersistentFlags().String(cliFlagDBDSN, "", "Database data source name to use.")
@@ -27,6 +26,7 @@ func createMainCmd() *cobra.Command {
 
 	cmd.AddCommand(
 		createServeCmd(),
+		createMigrateCmd(),
 	)
 
 	return cmd
