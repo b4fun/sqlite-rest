@@ -24,6 +24,7 @@ type QueryCompiler interface {
 	CompileAsSelect(table string) (CompiledQuery, error)
 	CompileAsUpdate(table string) (CompiledQuery, error)
 	CompileAsInsert(table string) (CompiledQuery, error)
+	CompileAsDelete(table string) (CompiledQuery, error)
 }
 
 type queryCompiler struct {
@@ -148,6 +149,23 @@ func (c *queryCompiler) CompileAsInsert(table string) (CompiledQuery, error) {
 
 	for _, v := range values {
 		rv.Values = append(rv.Values, v...)
+	}
+
+	return rv, nil
+}
+
+func (c *queryCompiler) CompileAsDelete(table string) (CompiledQuery, error) {
+	rv := CompiledQuery{}
+
+	rv.Query = fmt.Sprintf(`delete from %s`, table)
+
+	var qcs []string
+	for _, qc := range c.getQueryClauses() {
+		qcs = append(qcs, qc.Expr)
+		rv.Values = append(rv.Values, qc.Values...)
+	}
+	if len(qcs) > 0 {
+		rv.Query = fmt.Sprintf("%s where %s", rv.Query, strings.Join(qcs, " and "))
 	}
 
 	return rv, nil

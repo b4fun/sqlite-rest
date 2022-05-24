@@ -84,7 +84,10 @@ func NewServer(opts *ServerOptions) (*dbServer, error) {
 		serverMux.
 			HandleFunc(routePattern, rv.handleUpdateTable).
 			Methods(http.MethodPatch)
-		// TODO: upsert / delete
+		serverMux.
+			HandleFunc(routePattern, rv.handleDeleteTable).
+			Methods(http.MethodDelete)
+		// TODO: upsert
 	}
 
 	rv.server.Handler = serverMux
@@ -213,7 +216,7 @@ func (server *dbServer) handleUpdateTable(
 	qc := NewQueryCompilerFromRequest(req)
 	updateStmt, err := qc.CompileAsUpdate(target)
 	if err != nil {
-		logger.Error(err, "parse insert query")
+		logger.Error(err, "parse update query")
 		server.responseError(w, err)
 		return
 	}
@@ -227,7 +230,33 @@ func (server *dbServer) handleUpdateTable(
 
 	// TODO: implement support for retrieving object by inserted id
 	server.responseEmptyBody(w, http.StatusAccepted)
+}
 
+func (server *dbServer) handleDeleteTable(
+	w http.ResponseWriter,
+	req *http.Request,
+) {
+	vars := mux.Vars(req)
+	target := vars[routeVarTableOrView]
+
+	logger := server.logger.WithValues("target", target, "route", "handleDeleteTable")
+
+	qc := NewQueryCompilerFromRequest(req)
+	updateStmt, err := qc.CompileAsDelete(target)
+	if err != nil {
+		logger.Error(err, "parse delete query")
+		server.responseError(w, err)
+		return
+	}
+	logger.V(8).Info(updateStmt.Query)
+
+	_, err = server.execer.ExecContext(req.Context(), updateStmt.Query, updateStmt.Values...)
+	if err != nil {
+		server.responseError(w, err)
+		return
+	}
+
+	server.responseEmptyBody(w, http.StatusAccepted)
 }
 
 func createServeCmd() *cobra.Command {
