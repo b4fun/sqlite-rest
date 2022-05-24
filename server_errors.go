@@ -7,21 +7,22 @@ import (
 
 type ServerError struct {
 	Message    string `json:"message"`
-	Hints      string `json:"hints,omitempty"`
+	Code       string `json:"code,omitempty"`
+	Hint       string `json:"hint,omitempty"`
 	StatusCode int    `json:"-"`
 }
 
 func (se *ServerError) Error() string {
-	if se.Hints != "" {
-		return fmt.Sprintf("%s - %s", se.Message, se.Hints)
+	if se.Hint != "" {
+		return fmt.Sprintf("%s - %s", se.Message, se.Hint)
 	}
 	return se.Message
 }
 
-func (se *ServerError) WithHints(hints string) *ServerError {
+func (se *ServerError) WithHint(hint string) *ServerError {
 	rv := new(ServerError)
 	*rv = *se
-	rv.Hints = hints
+	rv.Hint = hint
 	return rv
 }
 
