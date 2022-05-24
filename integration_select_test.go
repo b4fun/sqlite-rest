@@ -1,33 +1,117 @@
 package main
 
 import (
-	"encoding/json"
-	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSelect_SingleTable_NoTable(t *testing.T) {
-	tc := createTestContextUsingInMemoryDB(t)
-	defer tc.CleanUp(t)
+func TestSelect_SingleTable(t *testing.T) {
+	t.Run("NoTable", func(t *testing.T) {
+		tc := createTestContextUsingInMemoryDB(t)
+		defer tc.CleanUp(t)
 
-	targetURL := tc.ServerURL()
-	targetURL.Path += "/test"
-	req, err := http.NewRequest(
-		http.MethodGet,
-		targetURL.String(),
-		nil,
-	)
-	assert.NoError(t, err)
+		client := tc.Client()
+		_, _, err := client.From("test").Select("id", "", false).
+			Execute()
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no such table: test")
+	})
 
-	resp, err := http.DefaultClient.Do(req)
-	assert.NoError(t, err)
-	defer resp.Body.Close()
+	t.Run("EmptyTable", func(t *testing.T) {
+		tc := createTestContextUsingInMemoryDB(t)
+		defer tc.CleanUp(t)
 
-	var body ServerError
-	err = json.NewDecoder(resp.Body).Decode(&body)
-	assert.NoError(t, err)
+		tc.ExecuteSQL(t, "CREATE TABLE test (id int)")
 
-	assert.Equal(t, "no such table: test", body.Message)
+		client := tc.Client()
+		res, _, err := client.From("test").Select("id", "", false).
+			Execute()
+		assert.NoError(t, err)
+
+		var rv []map[string]interface{}
+		tc.DecodeResult(t, res, &rv)
+		assert.Empty(t, rv)
+	})
+
+	t.Run("SelectAllColumns", func(t *testing.T) {
+		tc := createTestContextUsingInMemoryDB(t)
+		defer tc.CleanUp(t)
+
+		tc.ExecuteSQL(t, "CREATE TABLE test (id int, s text)")
+		tc.ExecuteSQL(t, `INSERT INTO test (id, s) VALUES (1, "a"), (1, "a"), (1, "a")`)
+
+		client := tc.Client()
+		res, _, err := client.From("test").Select("*", "", false).
+			Execute()
+		assert.NoError(t, err)
+
+		var rv []map[string]interface{}
+		tc.DecodeResult(t, res, &rv)
+		assert.Len(t, rv, 3)
+		for _, row := range rv {
+			assert.EqualValues(t, 1, row["id"])
+			assert.EqualValues(t, "a", row["s"])
+		}
+	})
+
+	t.Run("SelectSingleColumn", func(t *testing.T) {
+		tc := createTestContextUsingInMemoryDB(t)
+		defer tc.CleanUp(t)
+
+		tc.ExecuteSQL(t, "CREATE TABLE test (id int, s text)")
+		tc.ExecuteSQL(t, `INSERT INTO test (id, s) VALUES (1, "a"), (1, "a"), (1, "a")`)
+
+		client := tc.Client()
+		res, _, err := client.From("test").Select("id", "", false).
+			Execute()
+		assert.NoError(t, err)
+
+		var rv []map[string]interface{}
+		tc.DecodeResult(t, res, &rv)
+		assert.Len(t, rv, 3)
+		for _, row := range rv {
+			assert.EqualValues(t, 1, row["id"])
+		}
+	})
+
+	t.Run("SelectWithFilter", func(t *testing.T) {
+		tc := createTestContextUsingInMemoryDB(t)
+		defer tc.CleanUp(t)
+
+		tc.ExecuteSQL(t, "CREATE TABLE test (id int)")
+		tc.ExecuteSQL(t, `INSERT INTO test (id) VALUES (1), (2), (3)`)
+
+		client := tc.Client()
+		res, _, err := client.From("test").Select("id", "", false).
+			Eq("id", "1").
+			Execute()
+		assert.NoError(t, err)
+
+		var rv []map[string]interface{}
+		tc.DecodeResult(t, res, &rv)
+		assert.Len(t, rv, 1)
+		assert.EqualValues(t, 1, rv[0]["id"])
+	})
+
+	t.Run("SelectView", func(t *testing.T) {
+		tc := createTestContextUsingInMemoryDB(t)
+		defer tc.CleanUp(t)
+
+		tc.ExecuteSQL(t, "CREATE TABLE test (id int)")
+		tc.ExecuteSQL(t, `INSERT INTO test (id) VALUES (1), (1), (1)`)
+		tc.ExecuteSQL(t, "CREATE VIEW test_view (id) AS SELECT id + 1 FROM test")
+
+		client := tc.Client()
+		res, _, err := client.From("test_view").Select("id", "", false).
+			Execute()
+		assert.NoError(t, err)
+
+		var rv []map[string]interface{}
+		tc.DecodeResult(t, res, &rv)
+		assert.Len(t, rv, 3)
+		for _, row := range rv {
+			assert.EqualValues(t, 2, row["id"])
+		}
+	})
 }

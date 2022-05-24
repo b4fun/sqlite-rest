@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/jmoiron/sqlx"
+	"github.com/stretchr/testify/assert"
+	"github.com/supabase/postgrest-go"
 )
 
 type TestContext struct {
@@ -51,6 +54,24 @@ func (tc *TestContext) ServerURL() *url.URL {
 		panic(fmt.Sprintf("failed to parse server url: %s", err))
 	}
 	return u
+}
+
+func (tc *TestContext) Client() *postgrest.Client {
+	return postgrest.NewClient(
+		tc.ServerURL().String(),
+		"http",
+		nil,
+	)
+}
+
+func (tc *TestContext) ExecuteSQL(t testing.TB, stmt string, args ...interface{}) {
+	_, err := tc.DB().Exec(stmt, args...)
+	assert.NoError(t, err)
+}
+
+func (tc *TestContext) DecodeResult(t testing.TB, res []byte, des interface{}) {
+	err := json.Unmarshal(res, des)
+	assert.NoError(t, err)
 }
 
 func createTestLogger() logr.Logger {

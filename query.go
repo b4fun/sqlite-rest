@@ -79,13 +79,13 @@ func (c *queryCompiler) CompileAsUpdate(table string) (CompiledQuery, error) {
 		return rv, err
 	}
 	if len(payload.Columns) < 1 {
-		return rv, ErrBadRequest.WithHints("no columns to insert")
+		return rv, ErrBadRequest.WithHint("no columns to insert")
 	}
 	if len(payload.Payload) < 1 {
-		return rv, ErrBadRequest.WithHints("no data to insert")
+		return rv, ErrBadRequest.WithHint("no data to insert")
 	}
 	if len(payload.Payload) > 1 {
-		return rv, ErrBadRequest.WithHints("too many data to update")
+		return rv, ErrBadRequest.WithHint("too many data to update")
 	}
 
 	columns := payload.GetSortedColumns()
@@ -122,10 +122,10 @@ func (c *queryCompiler) CompileAsInsert(table string) (CompiledQuery, error) {
 		return rv, err
 	}
 	if len(payload.Columns) < 1 {
-		return rv, ErrBadRequest.WithHints("no columns to insert")
+		return rv, ErrBadRequest.WithHint("no columns to insert")
 	}
 	if len(payload.Payload) < 1 {
-		return rv, ErrBadRequest.WithHints("no data to insert")
+		return rv, ErrBadRequest.WithHint("no data to insert")
 	}
 
 	columns := payload.GetSortedColumns()
