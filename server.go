@@ -8,8 +8,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
 	"github.com/go-logr/logr"
-	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -71,22 +72,17 @@ func NewServer(opts *ServerOptions) (*dbServer, error) {
 		execer:  opts.Execer,
 	}
 
-	serverMux := mux.NewRouter()
+	serverMux := chi.NewRouter()
+
+	// TODO: allow specifying cors config from cli / table
+	serverMux.Use(cors.AllowAll().Handler)
 
 	{
 		routePattern := fmt.Sprintf("/{%s:[^/]+}", routeVarTableOrView)
-		serverMux.
-			HandleFunc(routePattern, rv.handleQueryTableOrView).
-			Methods(http.MethodGet)
-		serverMux.
-			HandleFunc(routePattern, rv.handleInsertTable).
-			Methods(http.MethodPost)
-		serverMux.
-			HandleFunc(routePattern, rv.handleUpdateTable).
-			Methods(http.MethodPatch)
-		serverMux.
-			HandleFunc(routePattern, rv.handleDeleteTable).
-			Methods(http.MethodDelete)
+		serverMux.Get(routePattern, rv.handleQueryTableOrView)
+		serverMux.Post(routePattern, rv.handleInsertTable)
+		serverMux.Patch(routePattern, rv.handleUpdateTable)
+		serverMux.Delete(routePattern, rv.handleDeleteTable)
 		// TODO: upsert
 	}
 
@@ -138,8 +134,7 @@ func (server *dbServer) handleQueryTableOrView(
 	w http.ResponseWriter,
 	req *http.Request,
 ) {
-	vars := mux.Vars(req)
-	target := vars[routeVarTableOrView]
+	target := chi.URLParam(req, routeVarTableOrView)
 
 	logger := server.logger.WithValues("target", target, "route", "handleQueryTableOrView")
 
@@ -150,6 +145,7 @@ func (server *dbServer) handleQueryTableOrView(
 		server.responseError(w, err)
 		return
 	}
+	// TODO: handle count query - use different query when requesting count
 	countTotal := "*"
 	logger.V(8).Info(selectStmt.Query)
 
@@ -187,8 +183,7 @@ func (server *dbServer) handleInsertTable(
 	w http.ResponseWriter,
 	req *http.Request,
 ) {
-	vars := mux.Vars(req)
-	target := vars[routeVarTableOrView]
+	target := chi.URLParam(req, routeVarTableOrView)
 
 	logger := server.logger.WithValues("target", target, "route", "handleInsertTable")
 
@@ -215,8 +210,7 @@ func (server *dbServer) handleUpdateTable(
 	w http.ResponseWriter,
 	req *http.Request,
 ) {
-	vars := mux.Vars(req)
-	target := vars[routeVarTableOrView]
+	target := chi.URLParam(req, routeVarTableOrView)
 
 	logger := server.logger.WithValues("target", target, "route", "handleUpdateTable")
 
@@ -243,8 +237,7 @@ func (server *dbServer) handleDeleteTable(
 	w http.ResponseWriter,
 	req *http.Request,
 ) {
-	vars := mux.Vars(req)
-	target := vars[routeVarTableOrView]
+	target := chi.URLParam(req, routeVarTableOrView)
 
 	logger := server.logger.WithValues("target", target, "route", "handleDeleteTable")
 
