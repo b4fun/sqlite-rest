@@ -12,6 +12,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 	"github.com/supabase/postgrest-go"
+	"k8s.io/klog/v2/ktesting"
 )
 
 type TestContext struct {
@@ -74,8 +75,8 @@ func (tc *TestContext) DecodeResult(t testing.TB, res []byte, des interface{}) {
 	assert.NoError(t, err)
 }
 
-func createTestLogger() logr.Logger {
-	return logr.Discard()
+func createTestLogger(t testing.TB) logr.Logger {
+	return ktesting.NewLogger(t, ktesting.NewConfig(ktesting.Verbosity(12)))
 }
 
 func createTestContextUsingInMemoryDB(t testing.TB) *TestContext {
@@ -88,7 +89,7 @@ func createTestContextUsingInMemoryDB(t testing.TB) *TestContext {
 
 	t.Log("creating server")
 	serverOpts := &ServerOptions{
-		Logger:  createTestLogger().WithName("test"),
+		Logger:  createTestLogger(t).WithName("test"),
 		Queryer: db,
 		Execer:  db,
 	}

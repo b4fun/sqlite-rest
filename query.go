@@ -11,6 +11,11 @@ import (
 	"strings"
 )
 
+const (
+	queryParameterNameSelect = "select"
+	queryParameterNameOrder  = "order"
+)
+
 type CompiledQuery struct {
 	Query  string
 	Values []interface{}
@@ -60,13 +65,21 @@ func (c *queryCompiler) CompileAsSelect(table string) (CompiledQuery, error) {
 		table,
 	)
 
-	var qcs []string
+	var queryClauses []string
 	for _, qc := range c.getQueryClauses() {
-		qcs = append(qcs, qc.Expr)
+		queryClauses = append(queryClauses, qc.Expr)
 		rv.Values = append(rv.Values, qc.Values...)
 	}
-	if len(qcs) > 0 {
-		rv.Query = fmt.Sprintf("%s where %s", rv.Query, strings.Join(qcs, " and "))
+	if len(queryClauses) > 0 {
+		rv.Query = fmt.Sprintf("%s where %s", rv.Query, strings.Join(queryClauses, " and "))
+	}
+
+	orderClauses, err := c.getOrderClauses()
+	if err != nil {
+		return rv, err
+	}
+	if len(orderClauses) > 0 {
+		rv.Query = fmt.Sprintf("%s order by %s", rv.Query, strings.Join(orderClauses, ", "))
 	}
 
 	return rv, nil
@@ -247,6 +260,46 @@ func (c *queryCompiler) getQueryClausesByInput(column string, s string) []Compil
 	return nil
 }
 
+var orderByNulls = map[string]string{
+	"nullslast":  "nulls last",
+	"nullsfirst": "nulls first",
+}
+
+func (c *queryCompiler) getOrderClauses() ([]string, error) {
+	v := c.getQueryParameter(queryParameterNameOrder)
+	if v == "" {
+		return nil, nil
+	}
+
+	translateOrderBy := func(s string) string {
+		if v, exists := orderByNulls[s]; exists {
+			return v
+		}
+		return s
+	}
+
+	var vs []string
+	for _, v := range strings.Split(v, ",") {
+		ps := strings.Split(v, ".")
+		switch {
+		case len(ps) == 1:
+			vs = append(vs, ps[0])
+		case len(ps) == 2:
+			// a.asc -> a asc
+			// a.nullslast -> a nulls last
+			vs = append(vs, fmt.Sprintf("%s %s", ps[0], translateOrderBy(ps[1])))
+		case len(ps) == 3:
+			// a.asc.nullslast
+			vs = append(vs, fmt.Sprintf("%s %s %s", ps[0], ps[1], translateOrderBy(ps[2])))
+		default:
+			// invalid
+			return nil, fmt.Errorf("invalid order by clause: %s", v)
+		}
+	}
+
+	return vs, nil
+}
+
 func (c *queryCompiler) getInputPayload() (InputPayloadWithColumns, error) {
 	contentType := c.req.Header.Get("content-type")
 	if contentType == "" {
@@ -327,8 +380,6 @@ func (c *queryCompiler) readyRequestBody() ([]byte, error) {
 
 	return b, nil
 }
-
-const queryParameterNameSelect = "select"
 
 type CompiledQueryParameter struct {
 	Expr   string
