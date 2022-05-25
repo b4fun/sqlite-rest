@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -63,6 +64,26 @@ func (tc *TestContext) Client() *postgrest.Client {
 		"http",
 		nil,
 	)
+}
+
+func (tc *TestContext) HTTPClient() *http.Client {
+	return &http.Client{}
+}
+
+func (tc *TestContext) NewRequest(
+	t testing.TB,
+	method string, path string,
+	body io.Reader,
+) *http.Request {
+	req, err := http.NewRequest(method, tc.ServerURL().String()+"/"+path, body)
+	assert.NoError(t, err)
+	return req
+}
+
+func (tc *TestContext) ExecuteRequest(t testing.TB, req *http.Request) *http.Response {
+	resp, err := tc.HTTPClient().Do(req)
+	assert.NoError(t, err)
+	return resp
 }
 
 func (tc *TestContext) ExecuteSQL(t testing.TB, stmt string, args ...interface{}) {

@@ -1,6 +1,10 @@
 package main
 
 import (
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -153,6 +157,84 @@ func TestSelect_SingleTable(t *testing.T) {
 			assert.EqualValues(t, 1, rv[0]["id"])
 			assert.EqualValues(t, 3, rv[1]["id"])
 			assert.EqualValues(t, 2, rv[2]["id"])
+		}
+	})
+
+	t.Run("SelectPagination", func(t *testing.T) {
+		tc := createTestContextUsingInMemoryDB(t)
+		defer tc.CleanUp(t)
+
+		tc.ExecuteSQL(t, "CREATE TABLE test (id int)")
+		var ps []string
+		for i := 0; i < 10; i++ {
+			ps = append(ps, fmt.Sprintf("(%d)", i+1))
+		}
+		tc.ExecuteSQL(t, fmt.Sprintf(`INSERT INTO test (id) VALUES %s`, strings.Join(ps, ", ")))
+
+		client := tc.Client()
+
+		{
+			res, _, err := client.From("test").Select("*", "", false).
+				Limit(3, "").
+				Order("id", &postgrest.OrderOpts{Ascending: true}).
+				Execute()
+			assert.NoError(t, err)
+
+			var rv []map[string]interface{}
+			tc.DecodeResult(t, res, &rv)
+			assert.Len(t, rv, 3)
+			assert.EqualValues(t, 1, rv[0]["id"])
+			assert.EqualValues(t, 2, rv[1]["id"])
+			assert.EqualValues(t, 3, rv[2]["id"])
+		}
+
+		{
+			res, _, err := client.From("test").Select("*", "", false).
+				Range(3, 5, "").
+				Order("id", &postgrest.OrderOpts{Ascending: true}).
+				Execute()
+			assert.NoError(t, err)
+
+			var rv []map[string]interface{}
+			tc.DecodeResult(t, res, &rv)
+			assert.Len(t, rv, 3)
+			assert.EqualValues(t, 4, rv[0]["id"])
+			assert.EqualValues(t, 5, rv[1]["id"])
+			assert.EqualValues(t, 6, rv[2]["id"])
+		}
+
+		{
+			req := tc.NewRequest(t, http.MethodGet, "test", nil)
+			req.Header.Set("Range", "3-5")
+			resp := tc.ExecuteRequest(t, req)
+			defer resp.Body.Close()
+
+			res, err := io.ReadAll(resp.Body)
+			assert.NoError(t, err)
+			var rv []map[string]interface{}
+			tc.DecodeResult(t, res, &rv)
+			assert.Len(t, rv, 3)
+			assert.EqualValues(t, 4, rv[0]["id"])
+			assert.EqualValues(t, 5, rv[1]["id"])
+			assert.EqualValues(t, 6, rv[2]["id"])
+			assert.Equal(t, resp.Header.Get("Content-Range"), "3-5/*")
+		}
+
+		{
+			req := tc.NewRequest(t, http.MethodGet, "test", nil)
+			req.Header.Set("Range", "7-")
+			resp := tc.ExecuteRequest(t, req)
+			defer resp.Body.Close()
+
+			res, err := io.ReadAll(resp.Body)
+			assert.NoError(t, err)
+			var rv []map[string]interface{}
+			tc.DecodeResult(t, res, &rv)
+			assert.Len(t, rv, 3)
+			assert.EqualValues(t, 8, rv[0]["id"])
+			assert.EqualValues(t, 9, rv[1]["id"])
+			assert.EqualValues(t, 10, rv[2]["id"])
+			assert.Equal(t, resp.Header.Get("Content-Range"), "7-/*")
 		}
 	})
 

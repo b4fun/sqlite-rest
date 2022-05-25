@@ -3,17 +3,24 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 )
 
 const (
 	queryParameterNameSelect = "select"
 	queryParameterNameOrder  = "order"
+	queryParameterNameLimit  = "limit"
+	queryParameterNameOffset = "offset"
+
+	headerNameRangeUnit = "range-unit"
+	headerNameRange     = "range"
 )
 
 type CompiledQuery struct {
@@ -30,6 +37,7 @@ type QueryCompiler interface {
 	CompileAsUpdate(table string) (CompiledQuery, error)
 	CompileAsInsert(table string) (CompiledQuery, error)
 	CompileAsDelete(table string) (CompiledQuery, error)
+	CompileContentRangeHeader(totalCount string) string
 }
 
 type queryCompiler struct {
@@ -82,6 +90,20 @@ func (c *queryCompiler) CompileAsSelect(table string) (CompiledQuery, error) {
 		rv.Query = fmt.Sprintf("%s order by %s", rv.Query, strings.Join(orderClauses, ", "))
 	}
 
+	limit, offset, err := c.getLimitOffset()
+	switch {
+	case err == nil:
+		rv.Query = fmt.Sprintf("%s limit %d", rv.Query, limit)
+		if offset != 0 {
+			rv.Query = fmt.Sprintf("%s offset %d", rv.Query, offset)
+		}
+	case errors.Is(err, errNoLimitOffset):
+		// no limit/offset
+	default:
+		return rv, err
+	}
+
+	fmt.Println(rv)
 	return rv, nil
 }
 
@@ -216,7 +238,10 @@ func (c *queryCompiler) getQueryClauses() []CompiledQueryParameter {
 
 func (c *queryCompiler) isColumnName(s string) bool {
 	switch strings.ToLower(s) {
-	case queryParameterNameSelect:
+	case queryParameterNameSelect,
+		queryParameterNameOffset,
+		queryParameterNameLimit,
+		queryParameterNameOrder:
 		return false
 	default:
 		return true
@@ -298,6 +323,88 @@ func (c *queryCompiler) getOrderClauses() ([]string, error) {
 	}
 
 	return vs, nil
+}
+
+var errNoLimitOffset = errors.New("no limit offset")
+
+func (c *queryCompiler) CompileContentRangeHeader(totalCount string) string {
+	limit, offset, err := c.getLimitOffset()
+	if err != nil {
+		// unable to infer limit/offset
+		return ""
+	}
+
+	if limit < 0 {
+		// unbound range
+		return fmt.Sprintf("%d-/%s", offset, totalCount)
+	}
+
+	return fmt.Sprintf("%d-%d/%s", offset, offset+limit-1, totalCount)
+}
+
+func (c *queryCompiler) getLimitOffset() (limit int64, offset int64, err error) {
+	limit, offset, err = c.getLimitOffsetFromHeader()
+	if err == nil {
+		return limit, offset, nil
+	}
+	if !errors.Is(err, errNoLimitOffset) {
+		return 0, 0, err
+	}
+	return c.getLimitOffsetFromQueryParameter()
+}
+
+func (c *queryCompiler) getLimitOffsetFromHeader() (int64, int64, error) {
+	rangeValue := c.req.Header.Get(headerNameRange)
+	if rangeValue == "" {
+		return 0, 0, errNoLimitOffset
+	}
+
+	ps := strings.SplitN(rangeValue, "-", 2)
+	if len(ps) < 1 {
+		return 0, 0, errNoLimitOffset
+	}
+
+	offset, err := strconv.ParseInt(ps[0], 10, 64)
+	if err != nil {
+		return 0, 0, err
+	}
+	if ps[1] == "" {
+		// no limit, per: https://www.sqlite.org/lang_select.html#limitoffset
+		// If the LIMIT expression evaluates to a negative value,
+		// then there is no upper bound on the number of rows returned
+		return -1, offset, nil
+	}
+	to, err := strconv.ParseInt(ps[1], 10, 64)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return to - offset + 1, offset, nil
+}
+
+func (c *queryCompiler) getLimitOffsetFromQueryParameter() (int64, int64, error) {
+	getInt64 := func(qp string) (int64, error) {
+		v := c.getQueryParameter(qp)
+		if v == "" {
+			return 0, errNoLimitOffset
+		}
+		return strconv.ParseInt(v, 10, 64)
+	}
+
+	limit, err := getInt64(queryParameterNameLimit)
+	if err != nil {
+		return 0, 0, err
+	}
+	offset, err := getInt64(queryParameterNameOffset)
+	switch {
+	case err == nil:
+		return limit, offset, nil
+	case errors.Is(err, errNoLimitOffset):
+		// offset is optional
+		return limit, 0, nil
+	default:
+		return 0, 0, err
+	}
 }
 
 func (c *queryCompiler) getInputPayload() (InputPayloadWithColumns, error) {

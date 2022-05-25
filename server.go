@@ -150,6 +150,7 @@ func (server *dbServer) handleQueryTableOrView(
 		server.responseError(w, err)
 		return
 	}
+	countTotal := "*"
 	logger.V(8).Info(selectStmt.Query)
 
 	rows, err := server.queryer.QueryxContext(req.Context(), selectStmt.Query, selectStmt.Values...)
@@ -173,6 +174,12 @@ func (server *dbServer) handleQueryTableOrView(
 	}
 
 	w.Header().Set("Content-Type", "application/json") // TODO: horner request config
+
+	if v := qc.CompileContentRangeHeader(countTotal); v != "" {
+		w.Header().Set("Range-Unit", "items")
+		w.Header().Set("Content-Range", v)
+	}
+
 	server.responseData(w, rv, http.StatusOK)
 }
 
