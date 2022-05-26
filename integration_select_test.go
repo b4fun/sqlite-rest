@@ -258,4 +258,94 @@ func TestSelect_SingleTable(t *testing.T) {
 			assert.EqualValues(t, 2, row["id"])
 		}
 	})
+
+	t.Run("SelectOperator", func(t *testing.T) {
+		tc := createTestContextUsingInMemoryDB(t)
+		defer tc.CleanUp(t)
+
+		tc.ExecuteSQL(t, "CREATE TABLE test (id int, s text, v int nullable)")
+		tc.ExecuteSQL(t, `INSERT INTO test (id, s, v) VALUES (1, "a", null), (2, "b", null), (3, "c", 1)`)
+
+		client := tc.Client()
+
+		cases := []struct {
+			qb       func(q *postgrest.QueryBuilder) *postgrest.FilterBuilder
+			expected []map[string]interface{}
+		}{
+			{
+				qb: func(q *postgrest.QueryBuilder) *postgrest.FilterBuilder {
+					return q.Select("id", "", false).
+						Eq("id", "1").
+						Eq("s", "a")
+				},
+				expected: []map[string]interface{}{{"id": 1}},
+			},
+			{
+				qb: func(q *postgrest.QueryBuilder) *postgrest.FilterBuilder {
+					return q.Select("id", "", false).
+						Lt("id", "1")
+				},
+				expected: []map[string]interface{}{},
+			},
+			{
+				qb: func(q *postgrest.QueryBuilder) *postgrest.FilterBuilder {
+					return q.Select("id", "", false).
+						Neq("id", "1").
+						Lt("s", "c")
+				},
+				expected: []map[string]interface{}{{"id": 2}},
+			},
+			{
+				qb: func(q *postgrest.QueryBuilder) *postgrest.FilterBuilder {
+					return q.Select("id", "", false).
+						Neq("id", "1").
+						Like("s", "c")
+				},
+				expected: []map[string]interface{}{{"id": 3}},
+			},
+			{
+				qb: func(q *postgrest.QueryBuilder) *postgrest.FilterBuilder {
+					return q.Select("id", "", false).
+						In("id", []string{"1", "2", "4", "10000"}).
+						Order("id", &postgrest.OrderOpts{Ascending: true})
+				},
+				expected: []map[string]interface{}{{"id": 1}, {"id": 2}},
+			},
+			{
+				qb: func(q *postgrest.QueryBuilder) *postgrest.FilterBuilder {
+					return q.Select("id", "", false).
+						Is("v", "null").
+						Order("id", &postgrest.OrderOpts{Ascending: true})
+				},
+				expected: []map[string]interface{}{{"id": 1}, {"id": 2}},
+			},
+			{
+				qb: func(q *postgrest.QueryBuilder) *postgrest.FilterBuilder {
+					return q.Select("id", "", false).
+						Is("v", "true").
+						Order("id", &postgrest.OrderOpts{Ascending: true})
+				},
+				expected: []map[string]interface{}{{"id": 3}},
+			},
+		}
+
+		for idx := range cases {
+			t.Run(fmt.Sprintf("case #%d", idx), func(t *testing.T) {
+				c := cases[idx]
+				res, _, err := c.qb(client.From("test")).Execute()
+				assert.NoError(t, err)
+
+				var rv []map[string]interface{}
+				tc.DecodeResult(t, res, &rv)
+				assert.Equal(t, len(c.expected), len(rv))
+				for idx, row := range rv {
+					expected := c.expected[idx]
+					assert.Equal(t, len(expected), len(row))
+					for k, v := range expected {
+						assert.EqualValues(t, v, row[k])
+					}
+				}
+			})
+		}
+	})
 }

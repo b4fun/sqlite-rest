@@ -37,3 +37,11 @@ var (
 		StatusCode: http.StatusBadRequest,
 	}
 )
+
+func ErrUnsupportedOperator(op string) *ServerError {
+	return &ServerError{
+		Message:    "Unsupported Operator",
+		Hint:       fmt.Sprintf("operator %q is unsupported", op),
+		StatusCode: http.StatusBadRequest,
+	}
+}

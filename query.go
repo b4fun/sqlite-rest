@@ -73,8 +73,12 @@ func (c *queryCompiler) CompileAsSelect(table string) (CompiledQuery, error) {
 		table,
 	)
 
+	parsedQueryClauses, err := c.getQueryClauses()
+	if err != nil {
+		return rv, err
+	}
 	var queryClauses []string
-	for _, qc := range c.getQueryClauses() {
+	for _, qc := range parsedQueryClauses {
 		queryClauses = append(queryClauses, qc.Expr)
 		rv.Values = append(rv.Values, qc.Values...)
 	}
@@ -138,8 +142,12 @@ func (c *queryCompiler) CompileAsUpdate(table string) (CompiledQuery, error) {
 		strings.Join(columnPlaceholders, ", "),
 	)
 
+	parsedQueryClauses, err := c.getQueryClauses()
+	if err != nil {
+		return rv, err
+	}
 	var qcs []string
-	for _, qc := range c.getQueryClauses() {
+	for _, qc := range parsedQueryClauses {
 		qcs = append(qcs, qc.Expr)
 		rv.Values = append(rv.Values, qc.Values...)
 	}
@@ -194,8 +202,12 @@ func (c *queryCompiler) CompileAsDelete(table string) (CompiledQuery, error) {
 
 	rv.Query = fmt.Sprintf(`delete from %s`, table)
 
+	parsedQueryClauses, err := c.getQueryClauses()
+	if err != nil {
+		return rv, err
+	}
 	var qcs []string
-	for _, qc := range c.getQueryClauses() {
+	for _, qc := range parsedQueryClauses {
 		qcs = append(qcs, qc.Expr)
 		rv.Values = append(rv.Values, qc.Values...)
 	}
@@ -218,14 +230,17 @@ func (c *queryCompiler) getSelectResultColumns() []string {
 	return vs
 }
 
-func (c *queryCompiler) getQueryClauses() []CompiledQueryParameter {
+func (c *queryCompiler) getQueryClauses() ([]CompiledQueryParameter, error) {
 	var rv []CompiledQueryParameter
 	for k := range c.req.URL.Query() {
 		if !c.isColumnName(k) {
 			continue
 		}
 
-		vs := c.getQueryClausesByColumn(k)
+		vs, err := c.getQueryClausesByColumn(k)
+		if err != nil {
+			return nil, err
+		}
 		if len(vs) < 1 {
 			continue
 		}
@@ -233,7 +248,7 @@ func (c *queryCompiler) getQueryClauses() []CompiledQueryParameter {
 		rv = append(rv, vs...)
 	}
 
-	return rv
+	return rv, nil
 }
 
 func (c *queryCompiler) isColumnName(s string) bool {
@@ -248,41 +263,49 @@ func (c *queryCompiler) isColumnName(s string) bool {
 	}
 }
 
-func (c *queryCompiler) getQueryClausesByColumn(column string) []CompiledQueryParameter {
+func (c *queryCompiler) getQueryClausesByColumn(
+	column string,
+) ([]CompiledQueryParameter, error) {
 	vs := c.getQueryParameters(column)
 	if len(vs) < 1 {
-		return nil
+		return nil, nil
 	}
 
 	var rv []CompiledQueryParameter
 	for _, v := range vs {
-		ps := c.getQueryClausesByInput(column, v)
+		ps, err := c.getQueryClausesByInput(column, v)
+		if err != nil {
+			return nil, err
+		}
 		if len(ps) < 1 {
 			continue
 		}
 		rv = append(rv, ps...)
 	}
 
-	return rv
+	return rv, nil
 }
 
-func (c *queryCompiler) getQueryClausesByInput(column string, s string) []CompiledQueryParameter {
+func (c *queryCompiler) getQueryClausesByInput(
+	column string,
+	s string,
+) ([]CompiledQueryParameter, error) {
 	if s == "" {
-		return nil
+		return nil, nil
 	}
 
 	// eq.1 => `eq 1`
 	ps := strings.SplitN(s, ".", 2)
 	op, userInput := ps[0], ps[1]
 	if op == "" || userInput == "" {
-		return nil
+		return nil, ErrUnsupportedOperator(s)
 	}
 
 	if p, exists := queryOpereators[op]; exists {
 		return p(column, op, userInput)
 	}
 
-	return nil
+	return nil, ErrUnsupportedOperator(s)
 }
 
 var orderByNulls = map[string]string{
@@ -493,26 +516,75 @@ type CompiledQueryParameter struct {
 	Values []interface{}
 }
 
-type queryOpereatorUserInputParseFunc func(column string, userInput string, value string) []CompiledQueryParameter
+type queryOpereatorUserInputParseFunc func(column string, userInput string, value string) ([]CompiledQueryParameter, error)
 
 func mapUserInputAsUnaryQuery(op string) queryOpereatorUserInputParseFunc {
-	return func(column string, userInput string, value string) []CompiledQueryParameter {
-		return []CompiledQueryParameter{
+	return func(column string, userInput string, value string) ([]CompiledQueryParameter, error) {
+		rv := []CompiledQueryParameter{
 			{
 				Expr:   fmt.Sprintf("%s %s ?", column, op),
 				Values: []interface{}{value},
 			},
 		}
+
+		return rv, nil
 	}
 }
 
+func mapAsInQuery(column string, userInput string, value string) ([]CompiledQueryParameter, error) {
+	value = strings.TrimPrefix(value, "(")
+	value = strings.TrimSuffix(value, ")")
+	value = fmt.Sprintf("[%s]", value)
+	var ps []interface{}
+	// FIXME: this is not 100% safe to parse user input as JSON
+	if err := json.Unmarshal([]byte(value), &ps); err != nil {
+		return nil, err
+	}
+
+	rv := []CompiledQueryParameter{
+		{
+			Expr:   fmt.Sprintf("%s IN (%s)", column, strings.Repeat("?,", len(ps)-1)+"?"),
+			Values: ps,
+		},
+	}
+
+	return rv, nil
+}
+
+func mapAsIsQuery(column string, userInput string, value string) ([]CompiledQueryParameter, error) {
+	rv := CompiledQueryParameter{
+		Expr:   fmt.Sprintf("%s IS ?", column),
+		Values: []interface{}{},
+	}
+
+	switch strings.ToLower(value) {
+	case "null":
+		rv.Values = append(rv.Values, nil)
+	case "false":
+		rv.Values = append(rv.Values, false)
+	case "true":
+		rv.Values = append(rv.Values, true)
+	default:
+		return nil, ErrUnsupportedOperator(fmt.Sprintf("%s.%s", userInput, value))
+	}
+
+	return []CompiledQueryParameter{rv}, nil
+}
+
+// ref: https://postgrest.org/en/stable/api.html#operators
 var queryOpereators = map[string]queryOpereatorUserInputParseFunc{
 	"eq": mapUserInputAsUnaryQuery("="),
 	"gt": mapUserInputAsUnaryQuery(">"), "ge": mapUserInputAsUnaryQuery(">="),
 	"lt": mapUserInputAsUnaryQuery("<"), "le": mapUserInputAsUnaryQuery("<="),
 	"neq":  mapUserInputAsUnaryQuery("!="),
 	"like": mapUserInputAsUnaryQuery("LIKE"), "ilike": mapUserInputAsUnaryQuery("ILIKE"),
-	// "in": "in", // TODO: support query operator parser
+	"in": mapAsInQuery,
+	"is": mapAsIsQuery,
+	// fts / plfts / phfts / wfts are unsupported
+	// cs / cd / ov are unsupported
+	// sl / sr / nxr / nxl / adj are unsupported
+	// TODO: add support for logical operators - we need to rework the qc
+	// not / or / and are unsupported
 }
 
 type InputPayloadWithColumns struct {
