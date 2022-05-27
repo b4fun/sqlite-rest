@@ -6,9 +6,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestUpdate_SingleTable(t *testing.T) {
+func testUpdate_SingleTable(t *testing.T, createTestContext func(t testing.TB) *TestContext) {
 	t.Run("NoTable", func(t *testing.T) {
-		tc := createTestContextUsingInMemoryDB(t)
+		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
 		client := tc.Client()
@@ -19,7 +19,7 @@ func TestUpdate_SingleTable(t *testing.T) {
 	})
 
 	t.Run("UpdateRecords", func(t *testing.T) {
-		tc := createTestContextUsingInMemoryDB(t)
+		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
 		tc.ExecuteSQL(t, "CREATE TABLE test (id int, s text)")
@@ -43,7 +43,7 @@ func TestUpdate_SingleTable(t *testing.T) {
 	})
 
 	t.Run("UpdateWithFilter", func(t *testing.T) {
-		tc := createTestContextUsingInMemoryDB(t)
+		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
 		tc.ExecuteSQL(t, "CREATE TABLE test (id int, s text)")
@@ -66,5 +66,19 @@ func TestUpdate_SingleTable(t *testing.T) {
 		for _, row := range rv {
 			assert.EqualValues(t, 1, row["id"])
 		}
+	})
+}
+
+func TestUpdate_SingleTable(t *testing.T) {
+	t.Run("in memory db", func(t *testing.T) {
+		testUpdate_SingleTable(t, createTestContextUsingInMemoryDB)
+	})
+
+	t.Run("HMAC token auth", func(t *testing.T) {
+		testUpdate_SingleTable(t, createTestContextWithHMACTokenAuth)
+	})
+
+	t.Run("RSA token auth", func(t *testing.T) {
+		testUpdate_SingleTable(t, createTestContextWithRSATokenAuth)
 	})
 }

@@ -11,9 +11,11 @@ import (
 	"github.com/supabase/postgrest-go"
 )
 
-func TestSelect_SingleTable(t *testing.T) {
+func testSelect_SingleTable(t *testing.T, createTestContext func(t testing.TB) *TestContext) {
+	t.Helper()
+
 	t.Run("NoTable", func(t *testing.T) {
-		tc := createTestContextUsingInMemoryDB(t)
+		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
 		client := tc.Client()
@@ -24,7 +26,7 @@ func TestSelect_SingleTable(t *testing.T) {
 	})
 
 	t.Run("EmptyTable", func(t *testing.T) {
-		tc := createTestContextUsingInMemoryDB(t)
+		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
 		tc.ExecuteSQL(t, "CREATE TABLE test (id int)")
@@ -40,7 +42,7 @@ func TestSelect_SingleTable(t *testing.T) {
 	})
 
 	t.Run("SelectAllColumns", func(t *testing.T) {
-		tc := createTestContextUsingInMemoryDB(t)
+		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
 		tc.ExecuteSQL(t, "CREATE TABLE test (id int, s text)")
@@ -61,7 +63,7 @@ func TestSelect_SingleTable(t *testing.T) {
 	})
 
 	t.Run("SelectSingleColumn", func(t *testing.T) {
-		tc := createTestContextUsingInMemoryDB(t)
+		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
 		tc.ExecuteSQL(t, "CREATE TABLE test (id int, s text)")
@@ -81,7 +83,7 @@ func TestSelect_SingleTable(t *testing.T) {
 	})
 
 	t.Run("SelectWithFilter", func(t *testing.T) {
-		tc := createTestContextUsingInMemoryDB(t)
+		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
 		tc.ExecuteSQL(t, "CREATE TABLE test (id int)")
@@ -100,7 +102,7 @@ func TestSelect_SingleTable(t *testing.T) {
 	})
 
 	t.Run("SelectWithOrder", func(t *testing.T) {
-		tc := createTestContextUsingInMemoryDB(t)
+		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
 		tc.ExecuteSQL(t, "CREATE TABLE test (id int, s text)")
@@ -163,7 +165,7 @@ func TestSelect_SingleTable(t *testing.T) {
 	t.Run("SelectPagination", func(t *testing.T) {
 		const rowsCount = int64(10)
 
-		tc := createTestContextUsingInMemoryDB(t)
+		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
 		tc.ExecuteSQL(t, "CREATE TABLE test (id int)")
@@ -258,7 +260,7 @@ func TestSelect_SingleTable(t *testing.T) {
 	})
 
 	t.Run("SelectView", func(t *testing.T) {
-		tc := createTestContextUsingInMemoryDB(t)
+		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
 		tc.ExecuteSQL(t, "CREATE TABLE test (id int)")
@@ -279,7 +281,7 @@ func TestSelect_SingleTable(t *testing.T) {
 	})
 
 	t.Run("SelectOperator", func(t *testing.T) {
-		tc := createTestContextUsingInMemoryDB(t)
+		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
 		tc.ExecuteSQL(t, "CREATE TABLE test (id int, s text, v int nullable)")
@@ -366,5 +368,20 @@ func TestSelect_SingleTable(t *testing.T) {
 				}
 			})
 		}
+	})
+
+}
+
+func TestSelect_SingleTable(t *testing.T) {
+	t.Run("in memory db", func(t *testing.T) {
+		testSelect_SingleTable(t, createTestContextUsingInMemoryDB)
+	})
+
+	t.Run("HMAC token auth", func(t *testing.T) {
+		testSelect_SingleTable(t, createTestContextWithHMACTokenAuth)
+	})
+
+	t.Run("RSA token auth", func(t *testing.T) {
+		testSelect_SingleTable(t, createTestContextWithRSATokenAuth)
 	})
 }

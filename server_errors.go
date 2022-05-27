@@ -36,6 +36,11 @@ var (
 		Message:    "Bad Request",
 		StatusCode: http.StatusBadRequest,
 	}
+
+	ErrUnauthorized = &ServerError{
+		Message:    "Unauthorized",
+		StatusCode: http.StatusUnauthorized,
+	}
 )
 
 func ErrUnsupportedOperator(op string) *ServerError {

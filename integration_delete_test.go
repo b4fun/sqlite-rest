@@ -6,9 +6,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestDelete_SingleTable(t *testing.T) {
+func testDelete_SingleTable(t *testing.T, createTestContext func(t testing.TB) *TestContext) {
 	t.Run("NoTable", func(t *testing.T) {
-		tc := createTestContextUsingInMemoryDB(t)
+		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
 		client := tc.Client()
@@ -18,7 +18,7 @@ func TestDelete_SingleTable(t *testing.T) {
 	})
 
 	t.Run("DeleteFromEmptyTable", func(t *testing.T) {
-		tc := createTestContextUsingInMemoryDB(t)
+		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
 		tc.ExecuteSQL(t, "CREATE TABLE test (id int, s text)")
@@ -29,7 +29,7 @@ func TestDelete_SingleTable(t *testing.T) {
 	})
 
 	t.Run("DeleteFromNonEmptyTable", func(t *testing.T) {
-		tc := createTestContextUsingInMemoryDB(t)
+		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
 		tc.ExecuteSQL(t, "CREATE TABLE test (id int, s text)")
@@ -49,7 +49,7 @@ func TestDelete_SingleTable(t *testing.T) {
 	})
 
 	t.Run("DeleteWithFilter", func(t *testing.T) {
-		tc := createTestContextUsingInMemoryDB(t)
+		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
 		tc.ExecuteSQL(t, "CREATE TABLE test (id int, s text)")
@@ -69,5 +69,19 @@ func TestDelete_SingleTable(t *testing.T) {
 		tc.DecodeResult(t, res, &rv)
 		assert.Len(t, rv, 1)
 		assert.EqualValues(t, 1, rv[0]["id"])
+	})
+}
+
+func TestDelete_SingleTable(t *testing.T) {
+	t.Run("in memory db", func(t *testing.T) {
+		testDelete_SingleTable(t, createTestContextUsingInMemoryDB)
+	})
+
+	t.Run("HMAC token auth", func(t *testing.T) {
+		testDelete_SingleTable(t, createTestContextWithHMACTokenAuth)
+	})
+
+	t.Run("RSA token auth", func(t *testing.T) {
+		testDelete_SingleTable(t, createTestContextWithRSATokenAuth)
 	})
 }
