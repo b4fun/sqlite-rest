@@ -145,12 +145,11 @@ func (server *dbServer) handleQueryTableOrView(
 		server.responseError(w, err)
 		return
 	}
-	// TODO: handle count query - use different query when requesting count
-	countTotal := "*"
 	logger.V(8).Info(selectStmt.Query)
 
 	rows, err := server.queryer.QueryxContext(req.Context(), selectStmt.Query, selectStmt.Values...)
 	if err != nil {
+		logger.Error(err, "query values")
 		server.responseError(w, err)
 		return
 	}
@@ -169,14 +168,44 @@ func (server *dbServer) handleQueryTableOrView(
 		rv = append(rv, p)
 	}
 
+	responseStatusCode := http.StatusOK
+
 	w.Header().Set("Content-Type", "application/json") // TODO: horner request config
+
+	countMethod := GetCountMethodFromRequest(req)
+	var countTotal string
+	switch countMethod {
+	case countNone:
+		countTotal = "*"
+	case countExact:
+		responseStatusCode = http.StatusPartialContent
+
+		countStmt, err := qc.CompileAsExactCount(target)
+		if err != nil {
+			logger.Error(err, "parse count query")
+			server.responseError(w, err)
+			return
+		}
+		logger.V(8).Info(countStmt.Query)
+
+		var count int64
+		if err := server.queryer.QueryRowxContext(
+			req.Context(),
+			countStmt.Query, countStmt.Values...,
+		).Scan(&count); err != nil {
+			logger.Error(err, "count values")
+			server.responseError(w, err)
+			return
+		}
+		countTotal = fmt.Sprint(count)
+	}
 
 	if v := qc.CompileContentRangeHeader(countTotal); v != "" {
 		w.Header().Set("Range-Unit", "items")
 		w.Header().Set("Content-Range", v)
 	}
 
-	server.responseData(w, rv, http.StatusOK)
+	server.responseData(w, rv, responseStatusCode)
 }
 
 func (server *dbServer) handleInsertTable(

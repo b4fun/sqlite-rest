@@ -19,6 +19,7 @@ const (
 	queryParameterNameLimit  = "limit"
 	queryParameterNameOffset = "offset"
 
+	headerNamePrefer    = "Prefer"
 	headerNameRangeUnit = "range-unit"
 	headerNameRange     = "range"
 )
@@ -34,6 +35,7 @@ func (q CompiledQuery) String() string {
 
 type QueryCompiler interface {
 	CompileAsSelect(table string) (CompiledQuery, error)
+	CompileAsExactCount(table string) (CompiledQuery, error)
 	CompileAsUpdate(table string) (CompiledQuery, error)
 	CompileAsInsert(table string) (CompiledQuery, error)
 	CompileAsDelete(table string) (CompiledQuery, error)
@@ -107,7 +109,30 @@ func (c *queryCompiler) CompileAsSelect(table string) (CompiledQuery, error) {
 		return rv, err
 	}
 
-	fmt.Println(rv)
+	return rv, nil
+}
+
+func (c *queryCompiler) CompileAsExactCount(table string) (CompiledQuery, error) {
+	rv := CompiledQuery{}
+
+	rv.Query = fmt.Sprintf(
+		"select count(1) from %s",
+		table,
+	)
+
+	parsedQueryClauses, err := c.getQueryClauses()
+	if err != nil {
+		return rv, err
+	}
+	var queryClauses []string
+	for _, qc := range parsedQueryClauses {
+		queryClauses = append(queryClauses, qc.Expr)
+		rv.Values = append(rv.Values, qc.Values...)
+	}
+	if len(queryClauses) > 0 {
+		rv.Query = fmt.Sprintf("%s where %s", rv.Query, strings.Join(queryClauses, " and "))
+	}
+
 	return rv, nil
 }
 
@@ -617,4 +642,43 @@ func (p InputPayloadWithColumns) GetValues(columns []string) [][]interface{} {
 	}
 
 	return rv
+}
+
+// CountMethod specifies the count method for the request.
+type CountMethod string
+
+const (
+	countNone  CountMethod = "none" // fallback
+	countExact CountMethod = "exact"
+	// TODO: support planned / estimated count
+)
+
+// Valid checks if the count method is valid.
+func (c CountMethod) Valid() bool {
+	switch c {
+	case countNone, countExact:
+		return true
+	default:
+		return false
+	}
+}
+
+func GetCountMethodFromRequest(req *http.Request) CountMethod {
+	v := req.Header.Get(headerNamePrefer)
+	if v == "" {
+		return countNone
+	}
+
+	// count=a => a
+	ps := strings.SplitN(v, "=", 2)
+	if len(ps) < 2 {
+		return countNone
+	}
+
+	countMethod := CountMethod(strings.ToLower(ps[1]))
+	if countMethod.Valid() {
+		return countMethod
+	}
+
+	return countNone
 }

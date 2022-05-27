@@ -161,12 +161,14 @@ func TestSelect_SingleTable(t *testing.T) {
 	})
 
 	t.Run("SelectPagination", func(t *testing.T) {
+		const rowsCount = int64(10)
+
 		tc := createTestContextUsingInMemoryDB(t)
 		defer tc.CleanUp(t)
 
 		tc.ExecuteSQL(t, "CREATE TABLE test (id int)")
 		var ps []string
-		for i := 0; i < 10; i++ {
+		for i := int64(0); i < rowsCount; i++ {
 			ps = append(ps, fmt.Sprintf("(%d)", i+1))
 		}
 		tc.ExecuteSQL(t, fmt.Sprintf(`INSERT INTO test (id) VALUES %s`, strings.Join(ps, ", ")))
@@ -201,6 +203,23 @@ func TestSelect_SingleTable(t *testing.T) {
 			assert.EqualValues(t, 4, rv[0]["id"])
 			assert.EqualValues(t, 5, rv[1]["id"])
 			assert.EqualValues(t, 6, rv[2]["id"])
+		}
+
+		{
+			res, count, err := client.From("test").Select("*", "exact", false).
+				Range(3, 5, "").
+				Order("id", &postgrest.OrderOpts{Ascending: true}).
+				Execute()
+			assert.NoError(t, err)
+
+			var rv []map[string]interface{}
+			tc.DecodeResult(t, res, &rv)
+			assert.Len(t, rv, 3)
+			assert.EqualValues(t, 4, rv[0]["id"])
+			assert.EqualValues(t, 5, rv[1]["id"])
+			assert.EqualValues(t, 6, rv[2]["id"])
+
+			assert.Equal(t, rowsCount, count)
 		}
 
 		{
