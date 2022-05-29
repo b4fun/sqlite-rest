@@ -21,20 +21,25 @@ const (
 )
 
 type ServerOptions struct {
-	Logger      logr.Logger
-	Addr        string
-	AuthOptions ServerAuthOptions
-	Queryer     sqlx.QueryerContext
-	Execer      sqlx.ExecerContext
+	Logger          logr.Logger
+	Addr            string
+	AuthOptions     ServerAuthOptions
+	SecurityOptions ServerSecurityOptions
+	Queryer         sqlx.QueryerContext
+	Execer          sqlx.ExecerContext
 }
 
 func (opts *ServerOptions) bindCLIFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&opts.Addr, "http-addr", ":8080", "server listen addr")
 	opts.AuthOptions.bindCLIFlags(fs)
+	opts.SecurityOptions.bindCLIFlags(fs)
 }
 
 func (opts *ServerOptions) defaults() error {
 	if err := opts.AuthOptions.defaults(); err != nil {
+		return err
+	}
+	if err := opts.SecurityOptions.defaults(); err != nil {
 		return err
 	}
 
@@ -82,17 +87,21 @@ func NewServer(opts *ServerOptions) (*dbServer, error) {
 
 	// TODO: allow specifying cors config from cli / table
 	serverMux.Use(cors.AllowAll().Handler)
-	authMiddleware := opts.AuthOptions.createAuthMiddleware(rv.responseError)
 
 	{
-		serverMux.With(authMiddleware).Group(func(r chi.Router) {
-			routePattern := fmt.Sprintf("/{%s:[^/]+}", routeVarTableOrView)
-			r.Get(routePattern, rv.handleQueryTableOrView)
-			r.Post(routePattern, rv.handleInsertTable)
-			r.Patch(routePattern, rv.handleUpdateTable)
-			r.Put(routePattern, rv.handleUpdateSingleEntity)
-			r.Delete(routePattern, rv.handleDeleteTable)
-		})
+		serverMux.
+			With(
+				opts.AuthOptions.createAuthMiddleware(rv.responseError),
+				opts.SecurityOptions.createTableOrViewAccessCheckMiddleware(rv.responseError, routeVarTableOrView),
+			).
+			Group(func(r chi.Router) {
+				routePattern := fmt.Sprintf("/{%s:[^/]+}", routeVarTableOrView)
+				r.Get(routePattern, rv.handleQueryTableOrView)
+				r.Post(routePattern, rv.handleInsertTable)
+				r.Patch(routePattern, rv.handleUpdateTable)
+				r.Put(routePattern, rv.handleUpdateSingleEntity)
+				r.Delete(routePattern, rv.handleDeleteTable)
+			})
 	}
 
 	rv.server.Handler = serverMux

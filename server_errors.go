@@ -41,6 +41,11 @@ var (
 		Message:    "Unauthorized",
 		StatusCode: http.StatusUnauthorized,
 	}
+
+	ErrAccessRestricted = &ServerError{
+		Message:    "Access Restricted",
+		StatusCode: http.StatusForbidden,
+	}
 )
 
 func ErrUnsupportedOperator(op string) *ServerError {

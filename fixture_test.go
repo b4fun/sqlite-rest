@@ -23,6 +23,8 @@ import (
 	"k8s.io/klog/v2/ktesting"
 )
 
+var enabledTestTables = []string{"test", "test_view"}
+
 type TestContext struct {
 	server    *httptest.Server
 	db        *sqlx.DB
@@ -135,6 +137,7 @@ func createTestContextUsingInMemoryDB(t testing.TB) *TestContext {
 		Execer:  db,
 	}
 	serverOpts.AuthOptions.disableAuth = true
+	serverOpts.SecurityOptions.EnabledTableOrViews = enabledTestTables
 	server, err := NewServer(serverOpts)
 	if err != nil {
 		t.Fatal(err)
@@ -190,6 +193,7 @@ func createTestContextWithHMACTokenAuth(t testing.TB) *TestContext {
 		Execer:  db,
 	}
 	serverOpts.AuthOptions.TokenFilePath = testTokenFile
+	serverOpts.SecurityOptions.EnabledTableOrViews = enabledTestTables
 	server, err := NewServer(serverOpts)
 	if err != nil {
 		t.Fatal(err)
@@ -265,6 +269,7 @@ func createTestContextWithRSATokenAuth(t testing.TB) *TestContext {
 		Execer:  db,
 	}
 	serverOpts.AuthOptions.RSAPublicKeyFilePath = testTokenFile
+	serverOpts.SecurityOptions.EnabledTableOrViews = enabledTestTables
 	server, err := NewServer(serverOpts)
 	if err != nil {
 		t.Fatal(err)
