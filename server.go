@@ -330,6 +330,7 @@ func createServeCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:           "serve",
+		Short:         "Start db server",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

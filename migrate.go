@@ -20,6 +20,7 @@ const tableNameMigrations = "__sqlite_rest_migrations"
 func createMigrateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "migrate migrations-dir",
+		Short:        "Apply database migrations",
 		SilenceUsage: true,
 		Args:         cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

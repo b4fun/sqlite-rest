@@ -29,6 +29,8 @@ func createMainCmd() *cobra.Command {
 		createMigrateCmd(),
 	)
 
+	cmd.CompletionOptions.DisableDefaultCmd = true
+
 	return cmd
 }
 
