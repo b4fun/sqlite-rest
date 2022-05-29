@@ -90,8 +90,8 @@ func NewServer(opts *ServerOptions) (*dbServer, error) {
 			r.Get(routePattern, rv.handleQueryTableOrView)
 			r.Post(routePattern, rv.handleInsertTable)
 			r.Patch(routePattern, rv.handleUpdateTable)
+			r.Put(routePattern, rv.handleUpdateSingleEntity)
 			r.Delete(routePattern, rv.handleDeleteTable)
-			// TODO: upsert
 		})
 	}
 
@@ -267,8 +267,31 @@ func (server *dbServer) handleUpdateTable(
 		return
 	}
 
-	// TODO: implement support for retrieving object by inserted id
 	server.responseEmptyBody(w, http.StatusAccepted)
+}
+
+func (server *dbServer) handleUpdateSingleEntity(
+	w http.ResponseWriter,
+	req *http.Request,
+) {
+	target := chi.URLParam(req, routeVarTableOrView)
+
+	logger := server.logger.WithValues("target", target, "route", "handleUpdateSingleEntity")
+
+	qc := NewQueryCompilerFromRequest(req)
+	updateStmt, err := qc.CompileAsUpdateSingleEntry(target)
+	if err != nil {
+		logger.Error(err, "parse update single entry query")
+		server.responseError(w, err)
+		return
+	}
+	logger.V(8).Info(updateStmt.Query)
+
+	_, err = server.execer.ExecContext(req.Context(), updateStmt.Query, updateStmt.Values...)
+	if err != nil {
+		server.responseError(w, err)
+		return
+	}
 }
 
 func (server *dbServer) handleDeleteTable(

@@ -37,6 +37,7 @@ type QueryCompiler interface {
 	CompileAsSelect(table string) (CompiledQuery, error)
 	CompileAsExactCount(table string) (CompiledQuery, error)
 	CompileAsUpdate(table string) (CompiledQuery, error)
+	CompileAsUpdateSingleEntry(table string) (CompiledQuery, error)
 	CompileAsInsert(table string) (CompiledQuery, error)
 	CompileAsDelete(table string) (CompiledQuery, error)
 	CompileContentRangeHeader(totalCount string) string
@@ -179,6 +180,57 @@ func (c *queryCompiler) CompileAsUpdate(table string) (CompiledQuery, error) {
 	if len(qcs) > 0 {
 		rv.Query = fmt.Sprintf("%s where %s", rv.Query, strings.Join(qcs, " and "))
 	}
+
+	return rv, nil
+}
+
+func (c *queryCompiler) CompileAsUpdateSingleEntry(table string) (CompiledQuery, error) {
+	rv := CompiledQuery{}
+
+	payload, err := c.getInputPayload()
+	if err != nil {
+		return rv, err
+	}
+	if len(payload.Columns) < 1 {
+		return rv, ErrBadRequest.WithHint("no columns to insert")
+	}
+	if len(payload.Payload) < 1 {
+		return rv, ErrBadRequest.WithHint("no data to insert")
+	}
+	if len(payload.Payload) > 1 {
+		return rv, ErrBadRequest.WithHint("too many data to update")
+	}
+
+	columns := payload.GetSortedColumns()
+	updateValues := payload.Payload[0]
+	var columnPlaceholders []string
+	for _, column := range columns {
+		columnPlaceholders = append(columnPlaceholders, fmt.Sprintf("%s = ?", column))
+		rv.Values = append(rv.Values, updateValues[column])
+	}
+
+	rv.Query = fmt.Sprintf(
+		"update %s set %s",
+		table,
+		strings.Join(columnPlaceholders, ", "),
+	)
+
+	parsedQueryClauses, err := c.getQueryClauses()
+	if err != nil {
+		return rv, err
+	}
+	if len(parsedQueryClauses) < 1 {
+		return rv, ErrBadRequest.WithHint("expect to specifiy primary key query")
+	}
+	var qcs []string
+	for _, qc := range parsedQueryClauses {
+		qcs = append(qcs, qc.Expr)
+		rv.Values = append(rv.Values, qc.Values...)
+	}
+	rv.Query = fmt.Sprintf("%s where %s", rv.Query, strings.Join(qcs, " and "))
+	// make sure only one row will be updated
+	// Needs SQLITE_ENABLE_UPDATE_DELETE_LIMIT , but it's not available in mattn/sqlite3
+	// rv.Query = fmt.Sprintf("%s limit 1", rv.Query)
 
 	return rv, nil
 }
