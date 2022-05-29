@@ -23,6 +23,10 @@ const (
 	headerNamePrefer    = "Prefer"
 	headerNameRangeUnit = "range-unit"
 	headerNameRange     = "range"
+
+	logicalOperatorNot = "not"
+	logicalOperatorAnd = "and"
+	logicalOperatorOr  = "or"
 )
 
 type CompiledQuery struct {
@@ -407,18 +411,14 @@ func (c *queryCompiler) getQueryClausesByInput(
 		return nil, nil
 	}
 
-	// eq.1 => `eq 1`
-	ps := strings.SplitN(s, ".", 2)
-	op, userInput := ps[0], ps[1]
-	if op == "" || userInput == "" {
-		return nil, ErrUnsupportedOperator(s)
+	switch column {
+	case logicalOperatorAnd, logicalOperatorOr:
+		// or=a.eq.1,b.eq.2 => or(a.eq.1, b.eq.2)
+		return parseQueryClauses(fmt.Sprintf("%s(%s)", column, s))
+	default:
+		// id=eq.1
+		return parseQueryClauses(fmt.Sprintf("%s.%s", column, s))
 	}
-
-	if p, exists := queryOpereators[op]; exists {
-		return p(column, op, userInput)
-	}
-
-	return nil, ErrUnsupportedOperator(s)
 }
 
 var orderByNulls = map[string]string{
@@ -627,6 +627,170 @@ func (c *queryCompiler) readyRequestBody() ([]byte, error) {
 type CompiledQueryParameter struct {
 	Expr   string
 	Values []interface{}
+}
+
+func negateCompiledQueryParameters(
+	qps []CompiledQueryParameter,
+	err error,
+) ([]CompiledQueryParameter, error) {
+	if err != nil {
+		return qps, err
+	}
+
+	if len(qps) < 1 {
+		return qps, nil
+	}
+
+	negatedResult := CompiledQueryParameter{}
+
+	var subExprs []string
+	for _, p := range qps {
+		subExprs = append(subExprs, p.Expr)
+		negatedResult.Values = append(negatedResult.Values, p.Values...)
+	}
+	negatedResult.Expr = fmt.Sprintf(
+		"(not (%s))",
+		strings.Join(subExprs, " and "),
+	)
+
+	return []CompiledQueryParameter{negatedResult}, nil
+}
+
+func joinCompiledQueryParameters(
+	operator string,
+) func([]CompiledQueryParameter, error) ([]CompiledQueryParameter, error) {
+	return func(
+		qps []CompiledQueryParameter,
+		err error,
+	) ([]CompiledQueryParameter, error) {
+		if err != nil {
+			return qps, err
+		}
+
+		if len(qps) < 1 {
+			return qps, nil
+		}
+
+		rv := CompiledQueryParameter{}
+
+		var subExprs []string
+		for _, p := range qps {
+			subExprs = append(subExprs, p.Expr)
+			rv.Values = append(rv.Values, p.Values...)
+		}
+		rv.Expr = fmt.Sprintf(
+			"(%s)",
+			strings.Join(subExprs, fmt.Sprintf(" %s ", operator)),
+		)
+
+		return []CompiledQueryParameter{rv}, nil
+	}
+}
+
+var (
+	andCompiledQueryParameters = joinCompiledQueryParameters("and")
+	orCompiledQueryParameters  = joinCompiledQueryParameters("or")
+)
+
+// (age.eq.14,not.and(age.gte.11,age.lte.17)) => [age.eq.14, not.and(age.gte.11,age.lte.17)]
+func tokenizeSubQueries(s string) []string {
+	for strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")") {
+		s = s[1 : len(s)-1]
+	}
+
+	var rv []string
+
+	var current string
+	subQueryLevel := 0
+	for _, c := range s {
+		if c == ',' && subQueryLevel == 0 {
+			rv = append(rv, current)
+			current = ""
+			continue
+		}
+		if c == '(' {
+			subQueryLevel += 1
+		}
+		if c == ')' {
+			subQueryLevel -= 1
+		}
+		current = current + string(c)
+	}
+	if current != "" {
+		rv = append(rv, current)
+	}
+
+	return rv
+}
+
+// parseQueryClauses parses user input queries to query parameters.
+// FIXME: this is a very naive and slow (O(n^2)) parser. We should employ a proper lexer & parser.
+func parseQueryClauses(s string) ([]CompiledQueryParameter, error) {
+	const (
+		logicalOperatorNotPrefix = logicalOperatorNot + "."
+		logicalOperatorAndPrefix = logicalOperatorAnd + "("
+		logicalOperatorOrPrefix  = logicalOperatorOr + "("
+	)
+
+	switch {
+	case s == "":
+		return nil, nil
+	case strings.HasPrefix(s, "("):
+		if !strings.HasSuffix(s, ")") {
+			return nil, ErrBadRequest.WithHint(fmt.Sprintf("incomplete sub query: %q", s))
+		}
+		subQueries := tokenizeSubQueries(s)
+		if len(subQueries) < 1 {
+			return nil, ErrBadRequest.WithHint(fmt.Sprintf("invalid sub query: %q", s))
+		}
+
+		var rv []CompiledQueryParameter
+		for _, subQuery := range subQueries {
+			q, err := parseQueryClauses(subQuery)
+			if err != nil {
+				return nil, err
+			}
+			rv = append(rv, q...)
+		}
+
+		return rv, nil
+	case strings.HasPrefix(s, logicalOperatorNotPrefix):
+		return negateCompiledQueryParameters(parseQueryClauses(s[len(logicalOperatorNotPrefix):]))
+	case strings.HasPrefix(s, logicalOperatorAndPrefix):
+		return andCompiledQueryParameters(parseQueryClauses(s[len(logicalOperatorAnd):]))
+	case strings.HasPrefix(s, logicalOperatorOrPrefix):
+		return orCompiledQueryParameters(parseQueryClauses(s[len(logicalOperatorOr):]))
+	default:
+		// column.operator.value | column.not.operator.value
+		ps := strings.SplitN(s, ".", 3)
+		if len(ps) != 3 {
+			return nil, ErrBadRequest.WithHint(fmt.Sprintf("invalid query clause: %q", s))
+		}
+		column, op, value := ps[0], ps[1], ps[2]
+		negate := false
+		if op == logicalOperatorNot {
+			negate = true
+			ps := strings.SplitN(value, ".", 2)
+			if len(ps) != 2 {
+				return nil, ErrBadRequest.WithHint(fmt.Sprintf("invalid query clause: %q", s))
+			}
+			op, value = ps[0], ps[1]
+		}
+
+		opProcess, exists := queryOpereators[op]
+		if !exists {
+			return nil, ErrUnsupportedOperator(s)
+		}
+
+		rv, err := opProcess(column, op, value)
+		if err != nil {
+			return nil, err
+		}
+		if negate {
+			rv, _ = negateCompiledQueryParameters(rv, nil)
+		}
+		return rv, nil
+	}
 }
 
 type queryOpereatorUserInputParseFunc func(column string, userInput string, value string) ([]CompiledQueryParameter, error)

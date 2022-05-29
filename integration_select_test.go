@@ -348,6 +348,30 @@ func testSelect_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 				},
 				expected: []map[string]interface{}{{"id": 3}},
 			},
+			{
+				qb: func(q *postgrest.QueryBuilder) *postgrest.FilterBuilder {
+					return q.Select("id", "", false).
+						Not("id", "eq", "1").
+						Order("id", &postgrest.OrderOpts{Ascending: true})
+				},
+				expected: []map[string]interface{}{{"id": 2}, {"id": 3}},
+			},
+			{
+				qb: func(q *postgrest.QueryBuilder) *postgrest.FilterBuilder {
+					return q.Select("id", "", false).
+						Or("id.eq.1,id.eq.3", "").
+						Order("id", &postgrest.OrderOpts{Ascending: true})
+				},
+				expected: []map[string]interface{}{{"id": 1}, {"id": 3}},
+			},
+			{
+				qb: func(q *postgrest.QueryBuilder) *postgrest.FilterBuilder {
+					return q.Select("id", "", false).
+						Or("id.eq.1,s.like.中文", "").
+						Order("id", &postgrest.OrderOpts{Ascending: true})
+				},
+				expected: []map[string]interface{}{{"id": 1}},
+			},
 		}
 
 		for idx := range cases {
