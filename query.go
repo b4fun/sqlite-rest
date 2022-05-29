@@ -14,10 +14,11 @@ import (
 )
 
 const (
-	queryParameterNameSelect = "select"
-	queryParameterNameOrder  = "order"
-	queryParameterNameLimit  = "limit"
-	queryParameterNameOffset = "offset"
+	queryParameterNameSelect     = "select"
+	queryParameterNameOrder      = "order"
+	queryParameterNameLimit      = "limit"
+	queryParameterNameOffset     = "offset"
+	queryParameterNameOnConflict = "on_conflict"
 
 	headerNamePrefer    = "Prefer"
 	headerNameRangeUnit = "range-unit"
@@ -238,6 +239,11 @@ func (c *queryCompiler) CompileAsUpdateSingleEntry(table string) (CompiledQuery,
 func (c *queryCompiler) CompileAsInsert(table string) (CompiledQuery, error) {
 	rv := CompiledQuery{}
 
+	preference, err := ParsePreferenceFromRequest(c.req)
+	if err != nil {
+		return rv, err
+	}
+
 	payload, err := c.getInputPayload()
 	if err != nil {
 		return rv, err
@@ -269,6 +275,35 @@ func (c *queryCompiler) CompileAsInsert(table string) (CompiledQuery, error) {
 
 	for _, v := range values {
 		rv.Values = append(rv.Values, v...)
+	}
+
+	if preference.Resolution != resolutionNone {
+		// FIXME: this is a potential sql injection vulnerability
+		var onConflictColumns []string
+		v := c.getQueryParameter(queryParameterNameOnConflict)
+		if v != "" {
+			onConflictColumns = strings.Split(v, ",")
+		}
+		var onConflictColumnsClause string
+		if len(onConflictColumns) > 0 {
+			onConflictColumnsClause = fmt.Sprintf(" (%s)", strings.Join(onConflictColumns, ", "))
+		}
+
+		switch preference.Resolution {
+		case resolutionIgnoreDuplicates:
+			rv.Query = fmt.Sprintf("%s on conflict%s do nothing", rv.Query, onConflictColumnsClause)
+		case resolutionMergeDuplicates:
+			var excludedColumns []string
+			for _, column := range columns {
+				excludedColumns = append(excludedColumns, fmt.Sprintf("%s = excluded.%s", column, column))
+			}
+			rv.Query = fmt.Sprintf(
+				"%s on conflict%s do update set %s",
+				rv.Query,
+				onConflictColumnsClause,
+				strings.Join(excludedColumns, ", "),
+			)
+		}
 	}
 
 	return rv, nil
@@ -331,9 +366,10 @@ func (c *queryCompiler) getQueryClauses() ([]CompiledQueryParameter, error) {
 func (c *queryCompiler) isColumnName(s string) bool {
 	switch strings.ToLower(s) {
 	case queryParameterNameSelect,
-		queryParameterNameOffset,
+		queryParameterNameOrder,
 		queryParameterNameLimit,
-		queryParameterNameOrder:
+		queryParameterNameOffset,
+		queryParameterNameOnConflict:
 		return false
 	default:
 		return true
@@ -700,7 +736,7 @@ func (p InputPayloadWithColumns) GetValues(columns []string) [][]interface{} {
 type CountMethod string
 
 const (
-	countNone  CountMethod = "none" // fallback
+	countNone  CountMethod = "" // fallback
 	countExact CountMethod = "exact"
 	// TODO: support planned / estimated count
 )
@@ -715,22 +751,67 @@ func (c CountMethod) Valid() bool {
 	}
 }
 
-func GetCountMethodFromRequest(req *http.Request) CountMethod {
+// ResolutionMethod specifies the conflict resolution for the request.
+type ResolutionMethod string
+
+const (
+	resolutionNone             = "" // fallback
+	resolutionMergeDuplicates  = "merge-duplicates"
+	resolutionIgnoreDuplicates = "ignore-duplicates"
+)
+
+// Valid checks if the resolution method is valid.
+func (r ResolutionMethod) Valid() bool {
+	switch r {
+	case resolutionNone, resolutionIgnoreDuplicates, resolutionMergeDuplicates:
+		return true
+	default:
+		return false
+	}
+}
+
+type Preference struct {
+	Resolution ResolutionMethod
+	Count      CountMethod
+	// TODO: retrun
+}
+
+func ParsePreferenceFromRequest(req *http.Request) (Preference, error) {
+	var rv Preference
+
 	v := req.Header.Get(headerNamePrefer)
 	if v == "" {
-		return countNone
+		return rv, nil
 	}
 
-	// count=a => a
-	ps := strings.SplitN(v, "=", 2)
-	if len(ps) < 2 {
-		return countNone
+	for _, p := range strings.Split(v, ",") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		// a=b => a,b
+		ps := strings.SplitN(p, "=", 2)
+		if len(ps) < 2 {
+			continue
+		}
+
+		switch strings.ToLower(ps[0]) {
+		case "count":
+			countMethod := CountMethod(strings.ToLower(ps[1]))
+			if countMethod.Valid() {
+				rv.Count = countMethod
+			} else {
+				return rv, ErrBadRequest.WithHint(fmt.Sprintf("unsupported count preference: %s", ps[1]))
+			}
+		case "resolution":
+			resolution := ResolutionMethod(strings.ToLower(ps[1]))
+			if resolution.Valid() {
+				rv.Resolution = resolution
+			} else {
+				return rv, ErrBadRequest.WithHint(fmt.Sprintf("unsupported resolution preference: %s", ps[1]))
+			}
+		}
 	}
 
-	countMethod := CountMethod(strings.ToLower(ps[1]))
-	if countMethod.Valid() {
-		return countMethod
-	}
-
-	return countNone
+	return rv, nil
 }

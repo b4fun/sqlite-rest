@@ -181,9 +181,14 @@ func (server *dbServer) handleQueryTableOrView(
 
 	w.Header().Set("Content-Type", "application/json") // TODO: horner request config
 
-	countMethod := GetCountMethodFromRequest(req)
+	preference, err := ParsePreferenceFromRequest(req)
+	if err != nil {
+		logger.Error(err, "parse preference")
+		server.responseError(w, err)
+		return
+	}
 	var countTotal string
-	switch countMethod {
+	switch preference.Count {
 	case countNone:
 		countTotal = "*"
 	case countExact:
