@@ -860,8 +860,6 @@ var queryOpereators = map[string]queryOpereatorUserInputParseFunc{
 	// fts / plfts / phfts / wfts are unsupported
 	// cs / cd / ov are unsupported
 	// sl / sr / nxr / nxl / adj are unsupported
-	// TODO: add support for logical operators - we need to rework the qc
-	// not / or / and are unsupported
 }
 
 type InputPayloadWithColumns struct {
