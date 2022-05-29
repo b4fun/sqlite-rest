@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -18,7 +17,7 @@ type ServerSecurityOptions struct {
 func (opts *ServerSecurityOptions) bindCLIFlags(fs *pflag.FlagSet) {
 	fs.StringSliceVar(
 		&opts.EnabledTableOrViews,
-		"--security-allow-table",
+		"security-allow-table",
 		[]string{},
 		"list of table or view names that are accessible (read & write)",
 	)
@@ -36,7 +35,6 @@ func (opts *ServerSecurityOptions) createTableOrViewAccessCheckMiddleware(
 	for _, t := range opts.EnabledTableOrViews {
 		accesibleTableOrViews[t] = struct{}{}
 	}
-	fmt.Println(accesibleTableOrViews)
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

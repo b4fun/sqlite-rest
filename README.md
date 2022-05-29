@@ -14,7 +14,7 @@ $ sqlite-rest migrate ./migrates
 
 ```
 $ echo test > test.token
-$ sqlite-rest serve --auth-token-file test.token
+$ sqlite-rest serve --auth-token-file test.token --security-allow-table test
 ```
 
 ## License
