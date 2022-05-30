@@ -1,8 +1,6 @@
 name: Publish Image
 
-on:
-  push:
-    branches: ["release"]
+on: release
 
 env:
   REGISTRY: ghcr.io
