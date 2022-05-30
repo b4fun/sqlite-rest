@@ -3,6 +3,7 @@ name: Publish Image
 on:
   release:
     action: released
+  # NOTE: this is for testing the workflow
   push:
     branches: ["release-test"]
 
