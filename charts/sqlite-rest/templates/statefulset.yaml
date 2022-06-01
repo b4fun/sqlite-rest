@@ -39,7 +39,7 @@ spec:
         {{- if .Values.server.secretNameAuthRSAPublicKey }}
         - name: auth-rsa-public-key
           secret:
-            secretName: {{ .Values.server.secretNameAuthRSAPublicKey }}
+            name: {{ .Values.server.secretNameAuthRSAPublicKey }}
         {{- end }}
         {{- if (not .Values.data.enabled) }}
         - name: data
@@ -48,12 +48,12 @@ spec:
         {{- if .Values.migrations.enabled }}
         - name: migrations
           configMap:
-            configMapName: {{ .Values.migrations.configMapName }}
+            name: {{ .Values.migrations.configMapName }}
         {{- end }}
         {{- if .Values.litestream.enabled }}
         - name: litestream-config
           configMap:
-            configMapName: {{ .Values.litestream.configMapName }}
+            name: {{ .Values.litestream.configMapName }}
         {{- end }}
       initContainers:
         {{- if .Values.litestream.enabled }}
@@ -89,7 +89,7 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
-            - /sqlite-rest-server
+            - sqlite-rest-server
             - migrate
           args:
             - /migrations
@@ -107,7 +107,7 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
-            - /sqlite-rest-server
+            - sqlite-rest-server
             - serve
           args:
             - --db-dsn=/data/db.sqlite3
@@ -132,11 +132,13 @@ spec:
             {{- if .Values.server.secretNameAuthToken }}
             - name: auth-token-file
               mountPath: /auth-token
+              subPath: auth.yaml
               readOnly: true
             {{- end }}
             {{- if .Values.server.secretNameAuthRSAPublicKey }}
             - name: auth-rsa-public-key
               mountPath: /auth-rsa-public-key
+              subPath: auth.yaml
               readOnly: true
             {{- end }}
         {{- if .Values.litestream.enabled }}

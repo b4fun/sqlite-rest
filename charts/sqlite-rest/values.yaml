@@ -22,7 +22,7 @@ data:
   enabled: false
   storageClassName: ""
   resource:
-    request:
+    requests:
       storage: "100Mi"
 
 labels:
