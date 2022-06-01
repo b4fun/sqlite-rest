@@ -1,0 +1,51 @@
+server:
+  logLevel: 5
+  useDevelLog: true
+  secretNameAuthToken: ""
+  secretNameAuthRSAPublicKey: ""
+  securityAllowTable: ""
+
+migrations:
+  enabled: false
+  configMapName: sqlite-rest-migrations
+
+litestream:
+  enabled: false
+  image:
+    repository: litestream/litestream
+    pullPolicy: IfNotPresent
+    tag: "0.3.6"
+  accessKeySecretName: sqlite-rest-litestream
+  configMapName: sqlite-rest-litestream-config
+
+data:
+  enabled: false
+  storageClassName: ""
+  resource:
+    request:
+      storage: "100Mi"
+
+labels:
+  build4.fun/app: sqlite-rest
+
+image:
+  repository: ghcr.io/b4fun/sqlite-rest/server
+  pullPolicy: IfNotPresent
+  tag: "v0.1.0"
+
+service:
+  type: ClusterIP
+  port: 8080
+
+serviceAccount:
+  name: sqlite-rest-server
+
+resources:
+  limits:
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 20Mi
+
+nodeSelector:
+  kubernetes.io/os: linux

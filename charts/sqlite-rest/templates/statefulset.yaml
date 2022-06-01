@@ -1,0 +1,172 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "sqlite-rest.fullname" . }}
+  labels:
+    {{- include "sqlite-rest.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "sqlite-rest.selectorLabels" . | nindent 6 }}
+  serviceName: {{ include "sqlite-rest.name" . }}
+
+  replicas: 1
+
+  volumeClaimTemplates:
+    {{- if .Values.data.enabled }}
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if .Values.data.storageClassName }}
+        storageClassName: {{ .Values.data.storageClassName }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.data.resource | nindent 10 }}
+    {{- end }}
+
+  template:
+    metadata:
+      labels:
+        {{- include "sqlite-rest.selectorLabels" . | nindent 8 }}
+    spec:
+      volumes:
+        {{- if .Values.server.secretNameAuthToken }}
+        - name: auth-token-file
+          secret:
+            secretName: {{ .Values.server.secretNameAuthToken }}
+        {{- end }}
+        {{- if .Values.server.secretNameAuthRSAPublicKey }}
+        - name: auth-rsa-public-key
+          secret:
+            secretName: {{ .Values.server.secretNameAuthRSAPublicKey }}
+        {{- end }}
+        {{- if (not .Values.data.enabled) }}
+        - name: data
+          emptyDir: {}
+        {{- end }}
+        {{- if .Values.migrations.enabled }}
+        - name: migrations
+          configMap:
+            configMapName: {{ .Values.migrations.configMapName }}
+        {{- end }}
+        {{- if .Values.litestream.enabled }}
+        - name: litestream-config
+          configMap:
+            configMapName: {{ .Values.litestream.configMapName }}
+        {{- end }}
+      initContainers:
+        {{- if .Values.litestream.enabled }}
+        - name: litestream-init
+          image: {{ .Values.litestream.image.repository }}:{{ .Values.litestream.image.tag }}
+          imagePullPolicy: {{ .Values.litestream.image.pullPolicy }}
+          args:
+            - restore
+            - '-if-db-not-exists'
+            - '-if-replica-exists'
+            - '-v'
+            - '/data/db.sqlite3'
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: litestream-config
+              mountPath: /etc/litestream.yml
+              subPath: litestream.yml
+          env:
+            - name: LITESTREAM_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.litestream.accessKeySecretName }}
+                  key: LITESTREAM_ACCESS_KEY_ID
+            - name: LITESTREAM_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.litestream.accessKeySecretName }}
+                  key: LITESTREAM_SECRET_ACCESS_KEY
+        {{- end }}
+        {{- if .Values.migrations.enabled }}
+        - name: migrations
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /sqlite-rest-server
+            - migrate
+          args:
+            - /migrations
+            - --db-dsn=/data/db.sqlite3
+            - --log-level={{ .Values.server.logLevel }}
+            - --log-devel={{ .Values.server.useDevelLog }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: migrations
+              mountPath: /migrations
+        {{- end }}
+      containers:
+        - name: server
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /sqlite-rest-server
+            - serve
+          args:
+            - --db-dsn=/data/db.sqlite3
+            - --security-allow-table={{ .Values.server.securityAllowTable }}
+            - --log-level={{ .Values.server.logLevel }}
+            - --log-devel={{ .Values.server.useDevelLog }}
+            {{- if .Values.server.secretNameAuthToken }}
+            - --auth-token-file=/auth-token
+            {{- end }}
+            {{- if .Values.server.secretNameAuthRSAPublicKey }}
+            - --auth-rsa-public-key=/auth-rsa-public-key
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            {{- if .Values.server.secretNameAuthToken }}
+            - name: auth-token-file
+              mountPath: /auth-token
+              readOnly: true
+            {{- end }}
+            {{- if .Values.server.secretNameAuthRSAPublicKey }}
+            - name: auth-rsa-public-key
+              mountPath: /auth-rsa-public-key
+              readOnly: true
+            {{- end }}
+        {{- if .Values.litestream.enabled }}
+        - name: litestream 
+          image: {{ .Values.litestream.image.repository }}:{{ .Values.litestream.image.tag }}
+          imagePullPolicy: {{ .Values.litestream.image.pullPolicy }}
+          args:
+            - replicate
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: litestream-config
+              mountPath: /etc/litestream.yml
+              subPath: litestream.yml
+          env:
+            - name: LITESTREAM_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: '{{ .Values.litestream.accessKeySecretName }}'
+                  key: LITESTREAM_ACCESS_KEY_ID
+            - name: LITESTREAM_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: '{{ .Values.litestream.accessKeySecretName }}'
+                  key: LITESTREAM_SECRET_ACCESS_KEY
+          ports:
+            - name: litestream-metrics
+              containerPort: 9090
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
