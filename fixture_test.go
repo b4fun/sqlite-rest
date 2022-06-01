@@ -294,3 +294,82 @@ func createTestContextWithRSATokenAuth(t testing.TB) *TestContext {
 		authTokenString,
 	)
 }
+
+type MigrationTestContext struct {
+	migrator  *dbMigrator
+	db        *sqlx.DB
+	cleanUpDB func(t testing.TB)
+}
+
+func (mtc *MigrationTestContext) Migrator() *dbMigrator {
+	return mtc.migrator
+}
+
+func (mtc *MigrationTestContext) CleanUp(t testing.TB) {
+	if mtc.cleanUpDB != nil {
+		mtc.cleanUpDB(t)
+	}
+}
+
+func NewMigrationTestContext(
+	t testing.TB,
+	migrations map[string]string,
+) *MigrationTestContext {
+	t.Log("creating test dir")
+	dir, err := os.MkdirTemp("", "sqlite-rest-test")
+	if err != nil {
+		t.Fatal(err)
+		return nil
+	}
+
+	migrationsDir := filepath.Join(dir, "migrations")
+	if err := os.MkdirAll(migrationsDir, 0755); err != nil {
+		t.Fatal(err)
+		return nil
+	}
+
+	t.Log("writing migrations")
+	for filename, content := range migrations {
+		p := filepath.Join(migrationsDir, filename)
+		if err := os.WriteFile(p, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+			return nil
+		}
+	}
+
+	t.Log("craeting in-memory db")
+	db, err := sqlx.Open("sqlite3", "")
+	if err != nil {
+		t.Fatal(err)
+		return nil
+	}
+
+	t.Log("creating migrator")
+	migratorOpts := &MigrateOptions{
+		Logger:    createTestLogger(t).WithName("test"),
+		DB:        db.DB,
+		SourceDIR: migrationsDir,
+	}
+
+	migrator, err := NewMigrator(migratorOpts)
+	if err != nil {
+		t.Fatal(err)
+		return nil
+	}
+
+	return &MigrationTestContext{
+		migrator: migrator,
+		db:       db,
+		cleanUpDB: func(t testing.TB) {
+			if err := db.Close(); err != nil {
+				t.Errorf("closing in-memory db: %s", err)
+				return
+			}
+
+			if err := os.RemoveAll(dir); err != nil {
+				t.Fatalf("removing test dir %q: %s", dir, err)
+				return
+			}
+		},
+	}
+}

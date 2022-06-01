@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -112,7 +113,6 @@ func NewMigrator(opts *MigrateOptions) (*dbMigrator, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("file://" + opts.SourceDIR)
 	migrator, err := migrate.NewWithDatabaseInstance(
 		"file://"+opts.SourceDIR,
 		"sqlite3", driver,
@@ -134,17 +134,27 @@ func (m *dbMigrator) Up(ctx context.Context) error {
 	logger.Info("applying operation")
 
 	err := m.migrator.Up()
+	if err == nil {
+		logger.Info("applied operation")
+
+		return nil
+	}
+
 	if errors.Is(err, migrate.ErrNoChange) {
 		// no update
-		err = nil
 		logger.V(8).Info("no pending migrations")
+		return nil
 	}
-	if err != nil {
 
-		logger.Error(err, "failed to apply operation")
-		return fmt.Errorf("up: %w", err)
+	var pathErr *fs.PathError
+	if errors.As(err, &pathErr) {
+		// no migrations set
+		if pathErr.Op == "first" && errors.Is(pathErr.Err, fs.ErrNotExist) {
+			logger.Info("no migrations to apply")
+			return nil
+		}
 	}
-	logger.Info("applied operation")
 
-	return nil
+	logger.Error(err, "failed to apply operation")
+	return fmt.Errorf("up: %w", err)
 }
