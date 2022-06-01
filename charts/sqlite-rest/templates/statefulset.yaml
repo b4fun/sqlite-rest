@@ -39,7 +39,7 @@ spec:
         {{- if .Values.server.secretNameAuthRSAPublicKey }}
         - name: auth-rsa-public-key
           secret:
-            name: {{ .Values.server.secretNameAuthRSAPublicKey }}
+            secretName: {{ .Values.server.secretNameAuthRSAPublicKey }}
         {{- end }}
         {{- if (not .Values.data.enabled) }}
         - name: data
@@ -52,8 +52,8 @@ spec:
         {{- end }}
         {{- if .Values.litestream.enabled }}
         - name: litestream-config
-          configMap:
-            name: {{ .Values.litestream.configMapName }}
+          secret:
+            secretName: {{ .Values.litestream.secretName }}
         {{- end }}
       initContainers:
         {{- if .Values.litestream.enabled }}
@@ -72,17 +72,6 @@ spec:
             - name: litestream-config
               mountPath: /etc/litestream.yml
               subPath: litestream.yml
-          env:
-            - name: LITESTREAM_ACCESS_KEY_ID
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.litestream.accessKeySecretName }}
-                  key: LITESTREAM_ACCESS_KEY_ID
-            - name: LITESTREAM_SECRET_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.litestream.accessKeySecretName }}
-                  key: LITESTREAM_SECRET_ACCESS_KEY
         {{- end }}
         {{- if .Values.migrations.enabled }}
         - name: migrations
@@ -153,19 +142,8 @@ spec:
             - name: litestream-config
               mountPath: /etc/litestream.yml
               subPath: litestream.yml
-          env:
-            - name: LITESTREAM_ACCESS_KEY_ID
-              valueFrom:
-                secretKeyRef:
-                  name: '{{ .Values.litestream.accessKeySecretName }}'
-                  key: LITESTREAM_ACCESS_KEY_ID
-            - name: LITESTREAM_SECRET_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: '{{ .Values.litestream.accessKeySecretName }}'
-                  key: LITESTREAM_SECRET_ACCESS_KEY
           ports:
-            - name: litestream-metrics
+            - name: ls-metrics
               containerPort: 9090
         {{- end }}
       {{- with .Values.nodeSelector }}

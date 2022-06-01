@@ -15,8 +15,7 @@ litestream:
     repository: litestream/litestream
     pullPolicy: IfNotPresent
     tag: "0.3.6"
-  accessKeySecretName: sqlite-rest-litestream
-  configMapName: sqlite-rest-litestream-config
+  secretName: sqlite-rest-litestream-config
 
 data:
   enabled: false
