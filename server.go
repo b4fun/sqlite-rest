@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/go-logr/logr"
 	"github.com/jmoiron/sqlx"
@@ -86,7 +87,12 @@ func NewServer(opts *ServerOptions) (*dbServer, error) {
 	serverMux := chi.NewRouter()
 
 	// TODO: allow specifying cors config from cli / table
-	serverMux.Use(cors.AllowAll().Handler)
+	serverMux.Use(
+		middleware.RequestID,
+		middleware.RealIP,
+		serverLogger(rv.logger),
+		cors.AllowAll().Handler,
+	)
 
 	{
 		serverMux.
