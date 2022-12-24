@@ -12,7 +12,7 @@ COPY . .
 
 # Build
 RUN GOOS=linux CGO_ENABLED=1 GOARCH=amd64 \
-    go build -v -x -o bin/sqlite-rest-server ./
+    go build -v -x -o bin/sqlite-rest ./
 
 FROM docker.io/library/debian:stable-slim
 
@@ -20,4 +20,6 @@ RUN mkdir -p /workspace
 
 WORKDIR /workspace
 
-COPY --from=builder /workspace/bin/sqlite-rest-server /bin/sqlite-rest-server
+COPY --from=builder /workspace/bin/sqlite-rest /bin/sqlite-rest
+
+ENTRYPOINT [ "/bin/sqlite-rest" ]

@@ -1,7 +1,11 @@
 bin/
+docs/
+charts/
 
 data/
 *.sqlite3
 *-shm
 *-wal
 *.token
+
+sqlite-rest
