@@ -394,15 +394,15 @@ func testSelect_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 		}
 	})
 
-	t.Run("SelectWithCasting", func(t *testing.T) {
+	t.Run("SelectWithAdaptingColumns", func(t *testing.T) {
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
-		tc.ExecuteSQL(t, "CREATE TABLE test (id int, s text)")
-		tc.ExecuteSQL(t, `INSERT INTO test (id, s) VALUES (1, "1"), (2, "2"), (3, "3")`)
+		tc.ExecuteSQL(t, "CREATE TABLE test (id int, s text, d text)")
+		tc.ExecuteSQL(t, `INSERT INTO test (id, s, d) VALUES (1, "1", "a"), (2, "2", "a"), (3, "3", "a")`)
 
 		client := tc.Client()
-		res, _, err := client.From("test").Select("id::text, s::int", "", false).
+		res, _, err := client.From("test").Select("id_str:id::text, s::int, d_text:d", "", false).
 			Execute()
 		assert.NoError(t, err)
 
@@ -410,8 +410,9 @@ func testSelect_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 		tc.DecodeResult(t, res, &rv)
 		assert.Len(t, rv, 3)
 		for idx, row := range rv {
-			assert.EqualValues(t, fmt.Sprint(idx+1), row["id"])
+			assert.EqualValues(t, fmt.Sprint(idx+1), row["id_str"])
 			assert.EqualValues(t, idx+1, row["s"])
+			assert.EqualValues(t, "a", row["d_text"])
 		}
 	})
 }

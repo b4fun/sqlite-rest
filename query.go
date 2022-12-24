@@ -29,6 +29,7 @@ const (
 	logicalOperatorOr  = "or"
 
 	doubleColonCastingOperator = "::" // NOTE: this is a PostgreSQL specific operator
+	singleColonRenameOperator  = ":"
 )
 
 type CompiledQuery struct {
@@ -336,18 +337,48 @@ func (c *queryCompiler) CompileAsDelete(table string) (CompiledQuery, error) {
 	return rv, nil
 }
 
-func getSelectResultColumn(s string) string {
-	if strings.Contains(s, doubleColonCastingOperator) {
-		ps := strings.SplitN(s, doubleColonCastingOperator, 2)
+func getSelectResultColumn(columnName string) string {
+	// newName:name::text
+	//  => cast(name as text) as newName
+
+	var (
+		columnType       string
+		targetColumnName string
+	)
+
+	if strings.Contains(columnName, doubleColonCastingOperator) {
+		ps := strings.SplitN(columnName, doubleColonCastingOperator, 2)
 		if len(ps) == 2 {
 			// is a valid casting call
-			columnName := ps[0]
-			columnType := ps[1]
-			return fmt.Sprintf("cast(%s as %s) as %s", columnName, columnType, columnName)
+			columnName = ps[0]
+			columnType = ps[1]
 		}
+		// NOTE: if it's not a valid casting, since the columnType is still empty,
+		//       no casting will be applied
 	}
 
-	return s
+	if strings.Contains(columnName, singleColonRenameOperator) {
+		ps := strings.SplitN(columnName, singleColonRenameOperator, 2)
+		if len(ps) == 2 {
+			// is a valid renaming call
+			targetColumnName = ps[0]
+			columnName = ps[1]
+		}
+		// NOTE: if it's not a valid renaming, since the targetColumnName is still empty,
+		//       no renaming will be applied
+	}
+
+	if columnType == "" {
+		if targetColumnName == "" {
+			return columnName
+		}
+		return fmt.Sprintf("%s as %s", columnName, targetColumnName)
+	} else {
+		if targetColumnName == "" {
+			targetColumnName = columnName
+		}
+		return fmt.Sprintf("cast(%s as %s) as %s", columnName, columnType, targetColumnName)
+	}
 }
 
 func (c *queryCompiler) getSelectResultColumns() []string {
