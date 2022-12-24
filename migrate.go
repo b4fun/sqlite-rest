@@ -60,6 +60,8 @@ func createMigrateCmd() *cobra.Command {
 		},
 	}
 
+	bindDBDSNFlag(cmd.Flags())
+
 	return cmd
 }
 

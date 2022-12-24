@@ -5,3 +5,5 @@ data/
 *-shm
 *-wal
 *.token
+
+sqlite-rest
