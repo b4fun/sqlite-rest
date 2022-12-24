@@ -13,20 +13,54 @@ Serve a RESTful API from any SQLite database
 [PostgREST]: https://postgrest.org/en/stable/
 [SQLite]: https://www.sqlite.org/
 
-## Usage
+## Installation
 
-### Migration
-
-```
-$ sqlite-rest migrate ./migrates
-```
-
-### Serve
+### Build From Source
 
 ```
-$ echo test > test.token
-$ sqlite-rest serve --auth-token-file test.token --security-allow-table test
+$ go install github.com/b4fun/sqlite-rest@latest
+$ sqlite-rest
+<omitted help output>
 ```
+
+### Using docker image
+
+```
+$ docker run -it --rm ghcr.io/b4fun/sqlite-rest/server:main
+<omitted help output>
+```
+
+## Quick Start
+
+Suppose we are serving a book store database with the following schema:
+
+```sql
+CREATE TABLE book (
+  id INTEGER PRIMARY KEY,
+  title TEXT NOT NULL,
+  author TEXT NOT NULL,
+  price REAL NOT NULL
+);
+```
+
+### Create a database
+
+```
+$ sqlite3 bookstore.sqlite3 < examples/bookstore/data.sql
+```
+
+### Start server
+
+```
+$ echo "topsecret" > test.token
+$ sqlite-rest serve --auth-token-file test.token --security-allow-table book
+```
+
+## Features
+
+### Authentication
+
+### Database Migrations
 
 ## License
 

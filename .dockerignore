@@ -9,3 +9,4 @@ data/
 *.token
 
 sqlite-rest
+test.token
