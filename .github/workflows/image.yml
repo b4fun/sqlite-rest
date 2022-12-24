@@ -5,7 +5,7 @@ on:
     action: released
   # NOTE: this is for testing the workflow
   push:
-    branches: ["release-test"]
+    branches: ["release-test", "main"]
 
 env:
   REGISTRY: ghcr.io
