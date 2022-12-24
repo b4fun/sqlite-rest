@@ -30,14 +30,14 @@ labels:
 image:
   repository: ghcr.io/b4fun/sqlite-rest/server
   pullPolicy: IfNotPresent
-  tag: "v0.1.1"
+  tag: "main"
 
 service:
   type: ClusterIP
   port: 8080
 
 serviceAccount:
-  name: sqlite-rest-server
+  name: sqlite-rest
 
 resources:
   limits:
