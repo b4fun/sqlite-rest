@@ -27,6 +27,8 @@ const (
 	logicalOperatorNot = "not"
 	logicalOperatorAnd = "and"
 	logicalOperatorOr  = "or"
+
+	doubleColonCastingOperator = "::" // NOTE: this is a PostgreSQL specific operator
 )
 
 type CompiledQuery struct {
@@ -334,6 +336,20 @@ func (c *queryCompiler) CompileAsDelete(table string) (CompiledQuery, error) {
 	return rv, nil
 }
 
+func getSelectResultColumn(s string) string {
+	if strings.Contains(s, doubleColonCastingOperator) {
+		ps := strings.SplitN(s, doubleColonCastingOperator, 2)
+		if len(ps) == 2 {
+			// is a valid casting call
+			columnName := ps[0]
+			columnType := ps[1]
+			return fmt.Sprintf("cast(%s as %s) as %s", columnName, columnType, columnName)
+		}
+	}
+
+	return s
+}
+
 func (c *queryCompiler) getSelectResultColumns() []string {
 	v := c.getQueryParameter(queryParameterNameSelect)
 	if v == "" {
@@ -341,7 +357,10 @@ func (c *queryCompiler) getSelectResultColumns() []string {
 	}
 
 	vs := strings.Split(v, ",")
-	// TOOD: support renaming, casting
+	// TOOD: support renaming
+	for idx := range vs {
+		vs[idx] = getSelectResultColumn(vs[idx])
+	}
 
 	return vs
 }

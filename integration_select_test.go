@@ -394,6 +394,26 @@ func testSelect_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 		}
 	})
 
+	t.Run("SelectWithCasting", func(t *testing.T) {
+		tc := createTestContext(t)
+		defer tc.CleanUp(t)
+
+		tc.ExecuteSQL(t, "CREATE TABLE test (id int, s text)")
+		tc.ExecuteSQL(t, `INSERT INTO test (id, s) VALUES (1, "1"), (2, "2"), (3, "3")`)
+
+		client := tc.Client()
+		res, _, err := client.From("test").Select("id::text, s::int", "", false).
+			Execute()
+		assert.NoError(t, err)
+
+		var rv []map[string]interface{}
+		tc.DecodeResult(t, res, &rv)
+		assert.Len(t, rv, 3)
+		for idx, row := range rv {
+			assert.EqualValues(t, fmt.Sprint(idx+1), row["id"])
+			assert.EqualValues(t, idx+1, row["s"])
+		}
+	})
 }
 
 func TestSelect_SingleTable(t *testing.T) {
