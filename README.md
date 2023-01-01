@@ -132,6 +132,22 @@ sqlite-rest aims to implement the same API as PostgRest. But currently not all o
 
 sqlite-rest provides built-in JWT based authentication. To use `HS256` / `HS384` / `HS512` algorithm, please specific the token file to read from via `--auth-token-file` flag. To use `RS256` / `RS384` / `RS512` algorithm, please specify the public key via `--auth-rsa-public-key` flag.
 
+### Tables/Views Access
+
+By default, sqlite-rest exposes **no** tables/views from accessing. To allow access to specific tables/views, please use `--security-allow-table` flag:
+
+**one table**
+
+```
+--security-allow-table books
+```
+
+**multiple tables**
+
+```
+--security-allow-table books,authors
+```
+
 ### Database Migrations
 
 ## License
