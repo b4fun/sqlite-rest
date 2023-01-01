@@ -162,6 +162,10 @@ $ sqlite-rest migrate --db-dsn ./bookstore.sqlite3 ./examples/migrations
 
 **Rollback migrations**
 
+```
+$ sqlite-rest migrate --db-dsn ./bookstore.sqlite3 --direction down --step 1 ./examples/migrations
+```
+
 [golang-migrate]: https://github.com/golang-migrate/migrate
 
 ## License
