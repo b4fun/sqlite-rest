@@ -16,9 +16,25 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const tableNameMigrations = "__sqlite_rest_migrations"
+const (
+	tableNameMigrations = "__sqlite_rest_migrations"
+
+	migrationDirectionUp   = "up"
+	migrationDirectionDown = "down"
+
+	migrationStepAll = -1
+)
+
+func isApplyAllStep(step int) bool {
+	return step <= 0
+}
 
 func createMigrateCmd() *cobra.Command {
+	var (
+		flagDirection string
+		flagStep      int
+	)
+
 	cmd := &cobra.Command{
 		Use:          "migrate migrations-dir",
 		Short:        "Apply database migrations",
@@ -52,8 +68,18 @@ func createMigrateCmd() *cobra.Command {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			if err := migrator.Up(ctx); err != nil {
-				return err
+			var migrateErr error
+			switch flagDirection {
+			case migrationDirectionUp:
+				migrateErr = migrator.Up(ctx, flagStep)
+			case migrationDirectionDown:
+				migrateErr = migrator.Down(ctx, flagStep)
+			default:
+				// defaults to up
+				migrateErr = migrator.Up(ctx, flagStep)
+			}
+			if migrateErr != nil {
+				return migrateErr
 			}
 
 			return nil
@@ -129,25 +155,20 @@ func NewMigrator(opts *MigrateOptions) (*dbMigrator, error) {
 	return rv, nil
 }
 
-func (m *dbMigrator) Up(ctx context.Context) error {
-	logger := m.logger.WithName("up")
-	logger.Info("applying operation")
-
-	err := m.migrator.Up()
-	if err == nil {
+func handleMigrateError(logger logr.Logger, op string, migrateErr error) error {
+	if migrateErr == nil {
 		logger.Info("applied operation")
-
 		return nil
 	}
 
-	if errors.Is(err, migrate.ErrNoChange) {
+	if errors.Is(migrateErr, migrate.ErrNoChange) {
 		// no update
 		logger.V(8).Info("no pending migrations")
 		return nil
 	}
 
 	var pathErr *fs.PathError
-	if errors.As(err, &pathErr) {
+	if errors.As(migrateErr, &pathErr) {
 		// no migrations set
 		if pathErr.Op == "first" && errors.Is(pathErr.Err, fs.ErrNotExist) {
 			logger.Info("no migrations to apply")
@@ -155,6 +176,36 @@ func (m *dbMigrator) Up(ctx context.Context) error {
 		}
 	}
 
-	logger.Error(err, "failed to apply operation")
-	return fmt.Errorf("up: %w", err)
+	logger.Error(migrateErr, "failed to apply operation")
+	return fmt.Errorf("%s: %w", op, migrateErr)
+}
+
+func (m *dbMigrator) Up(ctx context.Context, step int) error {
+	logger := m.logger.WithName("up")
+	logger.Info("applying operation")
+
+	var migrateErr error
+
+	if isApplyAllStep(step) {
+		migrateErr = m.migrator.Up()
+	} else {
+		migrateErr = m.migrator.Steps(step)
+	}
+
+	return handleMigrateError(logger, "up", migrateErr)
+}
+
+func (m *dbMigrator) Down(ctx context.Context, step int) error {
+	logger := m.logger.WithName("down")
+	logger.Info("applying operation")
+
+	var migrateErr error
+
+	if isApplyAllStep(step) {
+		migrateErr = m.migrator.Down()
+	} else {
+		migrateErr = m.migrator.Steps(-step)
+	}
+
+	return handleMigrateError(logger, "up", migrateErr)
 }
