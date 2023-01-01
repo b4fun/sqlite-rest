@@ -150,6 +150,20 @@ By default, sqlite-rest exposes **no** tables/views from accessing. To allow acc
 
 ### Database Migrations
 
+sqlite-rest supports database migrations via [golang-migrate][golang-migrate].
+
+**Apply migrations**
+
+```
+$ sqlite-rest migrate --db-dsn ./bookstore.sqlite3 ./examples/migrations
+{"level":"info","ts":1672614524.2731035,"logger":"db-migrator.up","caller":"sqlite-rest/migrate.go:136","msg":"applying operation"}
+{"level":"info","ts":1672614524.3081956,"logger":"db-migrator.up","caller":"sqlite-rest/migrate.go:140","msg":"applied operation"}
+```
+
+**Rollback migrations**
+
+[golang-migrate]: https://github.com/golang-migrate/migrate
+
 ## License
 
 MIT
