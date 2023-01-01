@@ -111,6 +111,23 @@ $ curl -H "Authorization: Bearer $AUTH_TOKEN" http://127.0.0.1:8080/books?price=
 
 ## Features
 
+### Parity with PostgRest
+
+sqlite-rest aims to implement the same API as PostgRest. But currently not all of them are being implemented. Below is a list that features supported in sqlite-rest. If you need support for implementing a feature absent in the list, feel free to create an issue :smile:
+
+- Tables and Views
+  - [x] Horizontal Filtering (Rows)
+  - [x] Vrtical Filtering (Columns)
+  - [x] Unicode support
+  - [x] Ordering
+  - [x] Limit and Pagination
+  - [x] Exact Count
+- Insertions
+  - [x] Specifying Columns
+- [x] Updates
+- [x] Upsert
+- [x] Deletions
+
 ### Authentication
 
 ### Database Migrations
