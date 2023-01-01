@@ -38,6 +38,9 @@ IMG_TAG ?= latest
 IMG_PREFIX ?= ghcr.io/b4fun/sqlite-rest
 IMG_BUILD_OPTS ?= --platform=linux/amd64
 
+build: fmt vet ## Build binary.
+	go build -o ./sqlite-rest .
+
 build-image: build-image-server ## Build docker images.
 
 build-image-server: ## Build server docker image.

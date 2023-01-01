@@ -345,7 +345,7 @@ func createServeCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:           "serve",
-		Short:         "Start db server",
+		Short:         "Start database server",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -380,7 +380,9 @@ func createServeCmd() *cobra.Command {
 			return nil
 		},
 	}
+
 	serverOpts.bindCLIFlags(cmd.Flags())
+	bindDBDSNFlag(cmd.Flags())
 
 	return cmd
 }
