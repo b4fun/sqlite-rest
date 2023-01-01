@@ -35,7 +35,7 @@ $ docker run -it --rm ghcr.io/b4fun/sqlite-rest/server:main
 Suppose we are serving a book store database with the following schema:
 
 ```sql
-CREATE TABLE book (
+CREATE TABLE books (
   id INTEGER PRIMARY KEY,
   title TEXT NOT NULL,
   author TEXT NOT NULL,
@@ -52,8 +52,61 @@ $ sqlite3 bookstore.sqlite3 < examples/bookstore/data.sql
 ### Start server
 
 ```
-$ echo "topsecret" > test.token
-$ sqlite-rest serve --auth-token-file test.token --security-allow-table book
+$ echo -n "topsecret" > test.token
+$ sqlite-rest serve --auth-token-file test.token --security-allow-table books --db-dsn ./bookstore.sqlite3
+{"level":"info","ts":1672528510.825417,"logger":"db-server","caller":"sqlite-rest/server.go:121","msg":"server started","addr":":8080"}
+... <omitted logs>
+```
+
+### Generate authentication token
+
+**NOTE: the following steps create a sample token for testing only, please use a strong password in production.**
+
+- Visit https://jwt.io/
+- Choose `HS256` as the algorithm
+- Enter `topsecret` as the secret
+- Copy the encoded JWT from the encoded output
+- Export the token as an environment variable
+
+  ```
+  $ export AUTH_TOKEN=<encoded jwt>
+  ```
+
+
+### Querying
+
+**Querying by book id**
+
+```
+$ curl -H "Authorization: Bearer $AUTH_TOKEN" http://127.0.0.1:8080/books?id=eq.1
+[
+ {
+  "author": "Stephen King",
+  "id": 1,
+  "price": 23.54,
+  "title": "Fairy Tale"
+ }
+]
+```
+
+**Querying by book price**
+
+```
+$ curl -H "Authorization: Bearer $AUTH_TOKEN" http://127.0.0.1:8080/books?price=lt.10
+[
+ {
+  "author": "Alice Hoffman",
+  "id": 2,
+  "price": 1.99,
+  "title": "The Bookstore Sisters: A Short Story"
+ },
+ {
+  "author": "Caroline Peckham",
+  "id": 4,
+  "price": 8.99,
+  "title": "Zodiac Academy 8: Sorrow and Starlight"
+ }
+]
 ```
 
 ## Features
