@@ -10,6 +10,7 @@ import (
 
 func TestMigration(t *testing.T) {
 	t.Run("empty migrations", func(t *testing.T) {
+		t.Parallel()
 		tc := NewMigrationTestContext(t, nil)
 		defer tc.CleanUp(t)
 
@@ -24,6 +25,7 @@ func TestMigration(t *testing.T) {
 	})
 
 	t.Run("apply all migrations", func(t *testing.T) {
+		t.Parallel()
 		tc := NewMigrationTestContext(t, map[string]string{
 			"1_test.up.sql":   `create table test (id int);`,
 			"1_test.down.sql": `drop table test;`,
@@ -55,6 +57,7 @@ func TestMigration(t *testing.T) {
 	})
 
 	t.Run("apply migrations by step", func(t *testing.T) {
+		t.Parallel()
 		tc := NewMigrationTestContext(t, map[string]string{
 			"1_test.up.sql":    `create table test (id int);`,
 			"1_test.down.sql":  `drop table test;`,
@@ -101,6 +104,7 @@ func TestMigration(t *testing.T) {
 
 	t.Run("failed migrations", func(t *testing.T) {
 		t.Run("up", func(t *testing.T) {
+			t.Parallel()
 			tc := NewMigrationTestContext(t, map[string]string{
 				"1_test.up.sql":   `create table test invalid sql;`,
 				"1_test.down.sql": `drop table test;`,
@@ -115,6 +119,7 @@ func TestMigration(t *testing.T) {
 		})
 
 		t.Run("down", func(t *testing.T) {
+			t.Parallel()
 			tc := NewMigrationTestContext(t, map[string]string{
 				"1_test.up.sql":   `create table test (id int);`,
 				"1_test.down.sql": `drop table invalid sql;`,
