@@ -1,5 +1,5 @@
 <h3 align="center">
-<a href="https://gtihub.com/b4fun/sqlite-rest">
+<a href="https://github.com/b4fun/sqlite-rest">
 <img src="docs/assets/logo.svg" width="180px" height="auto" style="inline-block">
 </a>
 </h3>
