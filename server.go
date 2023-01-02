@@ -384,6 +384,7 @@ func createServeCmd() *cobra.Command {
 			}
 
 			metricsServerOpts.Logger = logger
+			metricsServerOpts.Queryer = db
 			metricsServer, err := NewMetricsServer(*metricsServerOpts)
 			if err != nil {
 				setupLogger.Error(err, "failed to create metrics server")

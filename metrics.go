@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-logr/logr"
+	"github.com/jmoiron/sqlx"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -18,8 +19,9 @@ import (
 const metricsServerDisabledAddr = ""
 
 type MetricsServerOptions struct {
-	Logger logr.Logger
-	Addr   string
+	Logger  logr.Logger
+	Addr    string
+	Queryer sqlx.QueryerContext
 }
 
 func (opts *MetricsServerOptions) bindCLIFlags(fs *pflag.FlagSet) {
@@ -34,12 +36,19 @@ func (opts *MetricsServerOptions) defaults() error {
 		opts.Logger = logr.Discard()
 	}
 
+	if opts.Addr != metricsServerDisabledAddr {
+		if opts.Queryer == nil {
+			return fmt.Errorf(".Queryer is required")
+		}
+	}
+
 	return nil
 }
 
 type metricsServer struct {
-	logger logr.Logger
-	server *http.Server
+	logger  logr.Logger
+	server  *http.Server
+	queryer sqlx.QueryerContext
 }
 
 func NewMetricsServer(opts MetricsServerOptions) (*metricsServer, error) {
@@ -48,7 +57,8 @@ func NewMetricsServer(opts MetricsServerOptions) (*metricsServer, error) {
 	}
 
 	srv := &metricsServer{
-		logger: opts.Logger,
+		logger:  opts.Logger,
+		queryer: opts.Queryer,
 	}
 
 	if opts.Addr == metricsServerDisabledAddr {
@@ -65,12 +75,38 @@ func NewMetricsServer(opts MetricsServerOptions) (*metricsServer, error) {
 	return srv, nil
 }
 
+func (server *metricsServer) monitorDatabaseSize() {
+	const dbSizeQuery = `SELECT
+	page_count * page_size
+	FROM pragma_page_count(), pragma_page_size();`
+
+	observe := func() {
+		var size int64
+		err := server.queryer.QueryRowxContext(context.Background(), dbSizeQuery).Scan(&size)
+		if err != nil {
+			server.logger.Error(err, "failed to get database size")
+			return
+		}
+
+		server.logger.V(8).Info("database size", "size_bytes", size)
+		metricsDatabaseSize.Set(float64(size))
+	}
+	observe()
+
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		observe()
+	}
+}
+
 func (server *metricsServer) Start(done <-chan struct{}) {
 	if server.server == nil {
 		server.logger.V(8).Info("metrics server is disabled")
 		return
 	}
 
+	go server.monitorDatabaseSize()
 	go server.server.ListenAndServe()
 
 	server.logger.Info("metrics server started", "addr", server.server.Addr)
@@ -123,6 +159,14 @@ var (
 			Buckets:   []float64{1, 10, 100, 500, 1000},
 		},
 		[]string{metricsLabelTarget, metricsLabelTargetOperation, metricsLabelHTTPCode},
+	)
+
+	metricsDatabaseSize = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: metricsNamespace,
+			Name:      "database_size_bytes",
+			Help:      "Size of the database file",
+		},
 	)
 )
 
