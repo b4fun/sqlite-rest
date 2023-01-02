@@ -26,7 +26,7 @@ vet: ## Run go vet against code.
 
 run-server: fmt vet ## Run server.
 	echo "test" > local_dev.token
-	go run . serve --db-dsn ./test.sqlite3?_journal_mode=WAL --log-devel --log-level 12 --auth-token-file local_dev.token
+	go run . serve --db-dsn ./test.sqlite3?_journal_mode=WAL --metrics-addr :8081 --log-devel --log-level 12 --auth-token-file local_dev.token
 
 run-migrate: fmt vet ## Run migration.
 	go run . migrate --db-dsn ./test.sqlite3?_journal_mode=WAL --log-devel --log-level 12 ./data

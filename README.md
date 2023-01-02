@@ -148,6 +148,14 @@ By default, sqlite-rest exposes **no** tables/views from accessing. To allow acc
 --security-allow-table books,authors
 ```
 
+### Metrics
+
+sqlite-rest exposes metrics via [Prometheus][prometheus] format. By default, these metrics are exposed via `:8081/metrics` endpoint. To change the endpoint, please use `--metrics-addr` flag. To disable metrics, specific `--metrics-addr` to `""`.
+
+Recorded metrics can be found in [metrics.go](metrics.go).
+
+[prometheus]: https://prometheus.io/
+
 ### Database Migrations
 
 sqlite-rest supports database migrations via [golang-migrate][golang-migrate].

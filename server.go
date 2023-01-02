@@ -6,6 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -31,7 +34,8 @@ type ServerOptions struct {
 }
 
 func (opts *ServerOptions) bindCLIFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&opts.Addr, "http-addr", ":8080", "server listen addr")
+	fs.StringVar(&opts.Addr, "http-addr", ":8080", "server listen address")
+
 	opts.AuthOptions.bindCLIFlags(fs)
 	opts.SecurityOptions.bindCLIFlags(fs)
 }
@@ -97,16 +101,22 @@ func NewServer(opts *ServerOptions) (*dbServer, error) {
 	{
 		serverMux.
 			With(
-				opts.AuthOptions.createAuthMiddleware(rv.responseError),
-				opts.SecurityOptions.createTableOrViewAccessCheckMiddleware(rv.responseError, routeVarTableOrView),
+				opts.AuthOptions.createAuthMiddleware(func(w http.ResponseWriter, err error) {
+					metricsAuthFailedRequestsTotal.Inc()
+					rv.responseError(w, err)
+				}),
+				opts.SecurityOptions.createTableOrViewAccessCheckMiddleware(func(w http.ResponseWriter, err error) {
+					metricsAccessCheckFailedRequestsTotal.Inc()
+					rv.responseError(w, err)
+				}),
 			).
 			Group(func(r chi.Router) {
 				routePattern := fmt.Sprintf("/{%s:[^/]+}", routeVarTableOrView)
-				r.Get(routePattern, rv.handleQueryTableOrView)
-				r.Post(routePattern, rv.handleInsertTable)
-				r.Patch(routePattern, rv.handleUpdateTable)
-				r.Put(routePattern, rv.handleUpdateSingleEntity)
-				r.Delete(routePattern, rv.handleDeleteTable)
+				r.With(recordRequestMetrics("queryTableOrView")).Get(routePattern, rv.handleQueryTableOrView)
+				r.With(recordRequestMetrics("insertTable")).Post(routePattern, rv.handleInsertTable)
+				r.With(recordRequestMetrics("updateTable")).Patch(routePattern, rv.handleUpdateTable)
+				r.With(recordRequestMetrics("updateSingleEntity")).Put(routePattern, rv.handleUpdateSingleEntity)
+				r.With(recordRequestMetrics("deleteTable")).Delete(routePattern, rv.handleDeleteTable)
 			})
 	}
 
@@ -342,6 +352,7 @@ func (server *dbServer) handleDeleteTable(
 
 func createServeCmd() *cobra.Command {
 	serverOpts := new(ServerOptions)
+	metricsServerOpts := new(MetricsServerOptions)
 
 	cmd := &cobra.Command{
 		Use:           "serve",
@@ -372,16 +383,31 @@ func createServeCmd() *cobra.Command {
 				return err
 			}
 
+			metricsServerOpts.Logger = logger
+			metricsServer, err := NewMetricsServer(*metricsServerOpts)
+			if err != nil {
+				setupLogger.Error(err, "failed to create metrics server")
+				return err
+			}
+
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			server.Start(ctx.Done())
+			sigs := make(chan os.Signal, 1)
+			signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
+			done := ctx.Done()
+
+			go metricsServer.Start(done)
+			go server.Start(done)
+			<-sigs
 
 			return nil
 		},
 	}
 
 	serverOpts.bindCLIFlags(cmd.Flags())
+	metricsServerOpts.bindCLIFlags(cmd.Flags())
 	bindDBDSNFlag(cmd.Flags())
 
 	return cmd
