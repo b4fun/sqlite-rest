@@ -78,7 +78,7 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
-            - sqlite-rest-server
+            - sqlite-rest
             - migrate
           args:
             - /migrations
@@ -96,13 +96,14 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
-            - sqlite-rest-server
+            - sqlite-rest
             - serve
           args:
             - --db-dsn=/data/db.sqlite3
             - --security-allow-table={{ .Values.server.securityAllowTable }}
             - --log-level={{ .Values.server.logLevel }}
             - --log-devel={{ .Values.server.useDevelLog }}
+            - --metrics-server=:8081
             {{- if .Values.server.secretNameAuthToken }}
             - --auth-token-file=/auth-token
             {{- end }}
@@ -112,6 +113,9 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+              protocol: TCP
+            - name: metrics
+              containerPort: 8081
               protocol: TCP
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
