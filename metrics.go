@@ -24,7 +24,7 @@ type MetricsServerOptions struct {
 
 func (opts *MetricsServerOptions) bindCLIFlags(fs *pflag.FlagSet) {
 	fs.StringVar(
-		&opts.Addr, "metrics-addr", metricsServerDisabledAddr,
+		&opts.Addr, "metrics-addr", ":8081",
 		"metrics server listen address. Empty value means disabled.",
 	)
 }
@@ -120,7 +120,7 @@ var (
 			Namespace: metricsNamespace,
 			Name:      "http_request_duration_milliseconds",
 			Help:      "HTTP request latency",
-			Buckets:   []float64{50, 300, 1200, 5000},
+			Buckets:   []float64{1, 10, 100, 500, 1000},
 		},
 		[]string{metricsLabelTarget, metricsLabelTargetOperation, metricsLabelHTTPCode},
 	)
