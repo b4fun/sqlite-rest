@@ -75,7 +75,10 @@ func NewMetricsServer(opts MetricsServerOptions) (*metricsServer, error) {
 	return srv, nil
 }
 
-func (server *metricsServer) monitorDatabaseSize() {
+func (server *metricsServer) monitorDatabaseSize(
+	done <-chan struct{},
+	observeFn func(sizeInBytes float64),
+) {
 	const dbSizeQuery = `SELECT
 	page_count * page_size
 	FROM pragma_page_count(), pragma_page_size();`
@@ -88,15 +91,19 @@ func (server *metricsServer) monitorDatabaseSize() {
 			return
 		}
 
-		server.logger.V(8).Info("database size", "size_bytes", size)
-		metricsDatabaseSize.Set(float64(size))
+		observeFn(float64(size))
 	}
 	observe()
 
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
-	for range ticker.C {
-		observe()
+	for {
+		select {
+		case <-done:
+			return
+		case <-ticker.C:
+			observe()
+		}
 	}
 }
 
@@ -106,7 +113,10 @@ func (server *metricsServer) Start(done <-chan struct{}) {
 		return
 	}
 
-	go server.monitorDatabaseSize()
+	go server.monitorDatabaseSize(done, func(sizeInBytes float64) {
+		metricsDatabaseSize.Set(sizeInBytes)
+		server.logger.V(8).Info("database size", "sizeInBytes", sizeInBytes)
+	})
 	go server.server.ListenAndServe()
 
 	server.logger.Info("metrics server started", "addr", server.server.Addr)
