@@ -15,6 +15,7 @@ func testSelect_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 	t.Helper()
 
 	t.Run("NoTable", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
@@ -26,6 +27,7 @@ func testSelect_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 	})
 
 	t.Run("EmptyTable", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
@@ -42,6 +44,7 @@ func testSelect_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 	})
 
 	t.Run("SelectAllColumns", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
@@ -63,6 +66,7 @@ func testSelect_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 	})
 
 	t.Run("SelectSingleColumn", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
@@ -83,6 +87,7 @@ func testSelect_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 	})
 
 	t.Run("SelectWithFilter", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
@@ -102,6 +107,7 @@ func testSelect_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 	})
 
 	t.Run("SelectWithOrder", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
@@ -163,6 +169,7 @@ func testSelect_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 	})
 
 	t.Run("SelectPagination", func(t *testing.T) {
+		t.Parallel()
 		const rowsCount = int64(10)
 
 		tc := createTestContext(t)
@@ -260,6 +267,7 @@ func testSelect_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 	})
 
 	t.Run("SelectView", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
@@ -281,6 +289,7 @@ func testSelect_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 	})
 
 	t.Run("SelectOperator", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
@@ -395,6 +404,7 @@ func testSelect_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 	})
 
 	t.Run("SelectWithAdaptingColumns", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 

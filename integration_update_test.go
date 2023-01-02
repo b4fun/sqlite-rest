@@ -10,6 +10,7 @@ import (
 
 func testUpdate_SingleTable(t *testing.T, createTestContext func(t testing.TB) *TestContext) {
 	t.Run("NoTable", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
@@ -21,6 +22,7 @@ func testUpdate_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 	})
 
 	t.Run("UpdateRecords", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
@@ -45,6 +47,7 @@ func testUpdate_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 	})
 
 	t.Run("UpdateWithFilter", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
@@ -71,6 +74,7 @@ func testUpdate_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 	})
 
 	t.Run("UpdateSingleEntry", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 

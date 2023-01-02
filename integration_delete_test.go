@@ -8,6 +8,7 @@ import (
 
 func testDelete_SingleTable(t *testing.T, createTestContext func(t testing.TB) *TestContext) {
 	t.Run("NoTable", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
@@ -18,6 +19,7 @@ func testDelete_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 	})
 
 	t.Run("DeleteFromEmptyTable", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
@@ -29,6 +31,7 @@ func testDelete_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 	})
 
 	t.Run("DeleteFromNonEmptyTable", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
@@ -49,6 +52,7 @@ func testDelete_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 	})
 
 	t.Run("DeleteWithFilter", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 

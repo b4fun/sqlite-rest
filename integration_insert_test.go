@@ -10,6 +10,7 @@ import (
 
 func testInsert_SingleTable(t *testing.T, createTestContext func(t testing.TB) *TestContext) {
 	t.Run("NoTable", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
@@ -22,6 +23,7 @@ func testInsert_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 	})
 
 	t.Run("InsertSingleValue", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
@@ -45,6 +47,7 @@ func testInsert_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 	})
 
 	t.Run("InsertValues", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
@@ -70,6 +73,7 @@ func testInsert_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 	})
 
 	t.Run("UpsertMergeDuplicates", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
@@ -99,6 +103,7 @@ func testInsert_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 	})
 
 	t.Run("UpsertIgnoreDuplicates", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 
@@ -127,6 +132,7 @@ func testInsert_SingleTable(t *testing.T, createTestContext func(t testing.TB) *
 	})
 
 	t.Run("UpsertMergeDuplicatesWithOnConflicts", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContext(t)
 		defer tc.CleanUp(t)
 

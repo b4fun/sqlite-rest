@@ -11,6 +11,7 @@ import (
 
 func TestSecurityNegativeCases(t *testing.T) {
 	t.Run("Unauthorized", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContextWithHMACTokenAuth(t)
 		defer tc.CleanUp(t)
 
@@ -22,6 +23,7 @@ func TestSecurityNegativeCases(t *testing.T) {
 	})
 
 	t.Run("TableAccessRestricted", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContextWithHMACTokenAuth(t)
 		defer tc.CleanUp(t)
 
@@ -34,6 +36,7 @@ func TestSecurityNegativeCases(t *testing.T) {
 
 func TestSecuritySQLInjection(t *testing.T) {
 	t.Run("Update", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContextWithHMACTokenAuth(t)
 		defer tc.CleanUp(t)
 
@@ -65,6 +68,7 @@ func TestSecuritySQLInjection(t *testing.T) {
 	})
 
 	t.Run("Select", func(t *testing.T) {
+		t.Parallel()
 		tc := createTestContextWithHMACTokenAuth(t)
 		defer tc.CleanUp(t)
 
