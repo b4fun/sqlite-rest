@@ -6,6 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -31,7 +34,8 @@ type ServerOptions struct {
 }
 
 func (opts *ServerOptions) bindCLIFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&opts.Addr, "http-addr", ":8080", "server listen addr")
+	fs.StringVar(&opts.Addr, "http-addr", ":8080", "server listen address")
+
 	opts.AuthOptions.bindCLIFlags(fs)
 	opts.SecurityOptions.bindCLIFlags(fs)
 }
@@ -342,6 +346,7 @@ func (server *dbServer) handleDeleteTable(
 
 func createServeCmd() *cobra.Command {
 	serverOpts := new(ServerOptions)
+	metricsServerOpts := new(MetricsServerOptions)
 
 	cmd := &cobra.Command{
 		Use:           "serve",
@@ -372,16 +377,31 @@ func createServeCmd() *cobra.Command {
 				return err
 			}
 
+			metricsServerOpts.Logger = logger
+			metricsServer, err := NewMetricsServer(*metricsServerOpts)
+			if err != nil {
+				setupLogger.Error(err, "failed to create metrics server")
+				return err
+			}
+
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			server.Start(ctx.Done())
+			sigs := make(chan os.Signal, 1)
+			signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
+			done := ctx.Done()
+
+			go metricsServer.Start(done)
+			go server.Start(done)
+			<-sigs
 
 			return nil
 		},
 	}
 
 	serverOpts.bindCLIFlags(cmd.Flags())
+	metricsServerOpts.bindCLIFlags(cmd.Flags())
 	bindDBDSNFlag(cmd.Flags())
 
 	return cmd
