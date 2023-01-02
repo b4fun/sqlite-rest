@@ -29,7 +29,6 @@ func (opts *ServerSecurityOptions) defaults() error {
 
 func (opts *ServerSecurityOptions) createTableOrViewAccessCheckMiddleware(
 	responseErr func(w http.ResponseWriter, err error),
-	routeVarTableOrView string,
 ) func(http.Handler) http.Handler {
 	accesibleTableOrViews := make(map[string]struct{})
 	for _, t := range opts.EnabledTableOrViews {

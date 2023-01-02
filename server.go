@@ -101,16 +101,22 @@ func NewServer(opts *ServerOptions) (*dbServer, error) {
 	{
 		serverMux.
 			With(
-				opts.AuthOptions.createAuthMiddleware(rv.responseError),
-				opts.SecurityOptions.createTableOrViewAccessCheckMiddleware(rv.responseError, routeVarTableOrView),
+				opts.AuthOptions.createAuthMiddleware(func(w http.ResponseWriter, err error) {
+					metricsAuthFailedRequestsTotal.Inc()
+					rv.responseError(w, err)
+				}),
+				opts.SecurityOptions.createTableOrViewAccessCheckMiddleware(func(w http.ResponseWriter, err error) {
+					metricsAccessCheckFailedRequestsTotal.Inc()
+					rv.responseError(w, err)
+				}),
 			).
 			Group(func(r chi.Router) {
 				routePattern := fmt.Sprintf("/{%s:[^/]+}", routeVarTableOrView)
-				r.Get(routePattern, rv.handleQueryTableOrView)
-				r.Post(routePattern, rv.handleInsertTable)
-				r.Patch(routePattern, rv.handleUpdateTable)
-				r.Put(routePattern, rv.handleUpdateSingleEntity)
-				r.Delete(routePattern, rv.handleDeleteTable)
+				r.With(recordRequestMetrics("queryTableOrView")).Get(routePattern, rv.handleQueryTableOrView)
+				r.With(recordRequestMetrics("insertTable")).Post(routePattern, rv.handleInsertTable)
+				r.With(recordRequestMetrics("updateTable")).Patch(routePattern, rv.handleUpdateTable)
+				r.With(recordRequestMetrics("updateSingleEntity")).Put(routePattern, rv.handleUpdateSingleEntity)
+				r.With(recordRequestMetrics("deleteTable")).Delete(routePattern, rv.handleDeleteTable)
 			})
 	}
 

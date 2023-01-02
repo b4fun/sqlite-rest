@@ -2,10 +2,15 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/pflag"
 )
@@ -75,4 +80,70 @@ func (server *metricsServer) Start(done <-chan struct{}) {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	server.server.Shutdown(shutdownCtx)
+}
+
+const (
+	metricsNamespace            = "sqlite_rest"
+	metricsLabelTarget          = "target"    // name of the table/view
+	metricsLabelTargetOperation = "operation" // name of the operation
+	metricsLabelHTTPCode        = "http_code" // HTTP response code
+)
+
+var (
+	metricsAuthFailedRequestsTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: metricsNamespace,
+			Name:      "auth_failed_requests_total",
+			Help:      "Total number of failed authentication requests",
+		},
+	)
+
+	metricsAccessCheckFailedRequestsTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: metricsNamespace,
+			Name:      "access_check_failed_requests_total",
+			Help:      "Total number of failed access check requests",
+		},
+	)
+
+	metricsRequestTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: metricsNamespace,
+			Name:      "http_requests_total",
+			Help:      "Total number of HTTP requests",
+		},
+		[]string{metricsLabelTarget, metricsLabelTargetOperation, metricsLabelHTTPCode},
+	)
+
+	metricsRequestLatency = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: metricsNamespace,
+			Name:      "http_request_duration_milliseconds",
+			Help:      "HTTP request latency",
+			Buckets:   []float64{50, 300, 1200, 5000},
+		},
+		[]string{metricsLabelTarget, metricsLabelTargetOperation, metricsLabelHTTPCode},
+	)
+)
+
+func recordRequestMetrics(op string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+
+			defer func() {
+				httpCode := fmt.Sprint(ww.Status())
+				target := chi.URLParam(r, routeVarTableOrView)
+				metricsRequestTotal.
+					WithLabelValues(target, op, httpCode).
+					Inc()
+				metricsRequestLatency.
+					WithLabelValues(target, op, httpCode).
+					Observe(float64(time.Since(start).Milliseconds()))
+			}()
+
+			next.ServeHTTP(ww, r)
+		})
+	}
 }
