@@ -353,6 +353,7 @@ func (server *dbServer) handleDeleteTable(
 func createServeCmd() *cobra.Command {
 	serverOpts := new(ServerOptions)
 	metricsServerOpts := new(MetricsServerOptions)
+	pprofServerOpts := new(PprofServerOptions)
 
 	cmd := &cobra.Command{
 		Use:           "serve",
@@ -391,6 +392,13 @@ func createServeCmd() *cobra.Command {
 				return err
 			}
 
+			pprofServerOpts.Logger = logger
+			pprofServer, err := NewPprofServer(*pprofServerOpts)
+			if err != nil {
+				setupLogger.Error(err, "failed to create pprof server")
+				return err
+			}
+
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -400,6 +408,7 @@ func createServeCmd() *cobra.Command {
 			done := ctx.Done()
 
 			go metricsServer.Start(done)
+			go pprofServer.Start(done)
 			go server.Start(done)
 			<-sigs
 
@@ -409,6 +418,7 @@ func createServeCmd() *cobra.Command {
 
 	serverOpts.bindCLIFlags(cmd.Flags())
 	metricsServerOpts.bindCLIFlags(cmd.Flags())
+	pprofServerOpts.bindCLIFlags(cmd.Flags())
 	bindDBDSNFlag(cmd.Flags())
 
 	return cmd

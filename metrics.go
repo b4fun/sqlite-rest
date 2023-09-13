@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/http/pprof"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -16,7 +17,14 @@ import (
 	"github.com/spf13/pflag"
 )
 
+func init() {
+	// NOTE: this is to remove the registered pprof handlers from net/http/pprof init call.
+	// The pprof handlers will be registered only if the pprof server is enabled.
+	http.DefaultServeMux = http.NewServeMux()
+}
+
 const metricsServerDisabledAddr = ""
+const pprofServerDisabledAddr = ""
 
 type MetricsServerOptions struct {
 	Logger  logr.Logger
@@ -200,4 +208,75 @@ func recordRequestMetrics(op string) func(http.Handler) http.Handler {
 			next.ServeHTTP(ww, r)
 		})
 	}
+}
+
+type PprofServerOptions struct {
+	Logger logr.Logger
+	Addr   string
+}
+
+func (opts *PprofServerOptions) bindCLIFlags(fs *pflag.FlagSet) {
+	fs.StringVar(
+		&opts.Addr, "pprof-addr", pprofServerDisabledAddr,
+		"pprof server listen address. Empty value means disabled.",
+	)
+}
+
+func (opts *PprofServerOptions) defaults() error {
+	if opts.Logger.GetSink() == nil {
+		opts.Logger = logr.Discard()
+	}
+
+	return nil
+}
+
+type pprofServer struct {
+	logger logr.Logger
+	server *http.Server
+}
+
+func NewPprofServer(opts PprofServerOptions) (*pprofServer, error) {
+	if err := opts.defaults(); err != nil {
+		return nil, err
+	}
+
+	srv := &pprofServer{
+		logger: opts.Logger,
+	}
+
+	if opts.Addr == pprofServerDisabledAddr {
+		return srv, nil
+	}
+
+	serverMux := http.NewServeMux()
+	serverMux.HandleFunc("/debug/pprof/", pprof.Index)
+	serverMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	serverMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	serverMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	serverMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
+	srv.server = &http.Server{
+		Addr:    opts.Addr,
+		Handler: serverMux,
+	}
+
+	return srv, nil
+}
+
+func (server *pprofServer) Start(done <-chan struct{}) {
+	if server.server == nil {
+		return
+	}
+
+	server.logger.Info("pprof server is enabled, make sure it's not exposed to the public internet")
+
+	go server.server.ListenAndServe()
+
+	server.logger.Info("pprof server started", "addr", server.server.Addr)
+	<-done
+
+	server.logger.Info("shutting pprof server")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	server.server.Shutdown(shutdownCtx)
 }
