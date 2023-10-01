@@ -14,7 +14,7 @@ require (
 	github.com/prometheus/client_golang v1.16.0
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.8.3
+	github.com/stretchr/testify v1.8.4
 	github.com/supabase/postgrest-go v0.0.7
 	go.uber.org/zap v1.24.0
 	k8s.io/klog/v2 v2.100.1
