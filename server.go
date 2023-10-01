@@ -152,10 +152,9 @@ func (server *dbServer) responseData(w http.ResponseWriter, data interface{}, st
 	w.WriteHeader(statusCode)
 
 	enc := json.NewEncoder(w)
-	enc.SetIndent("", " ")
 	if encodeErr := enc.Encode(data); encodeErr != nil {
 		server.logger.Error(encodeErr, "failed to write response")
-		w.WriteHeader(http.StatusCreated)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 }

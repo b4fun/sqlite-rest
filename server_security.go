@@ -30,16 +30,16 @@ func (opts *ServerSecurityOptions) defaults() error {
 func (opts *ServerSecurityOptions) createTableOrViewAccessCheckMiddleware(
 	responseErr func(w http.ResponseWriter, err error),
 ) func(http.Handler) http.Handler {
-	accesibleTableOrViews := make(map[string]struct{})
+	accessibleTableOrViews := make(map[string]struct{})
 	for _, t := range opts.EnabledTableOrViews {
-		accesibleTableOrViews[t] = struct{}{}
+		accessibleTableOrViews[t] = struct{}{}
 	}
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			target := chi.URLParam(req, routeVarTableOrView)
 
-			if _, ok := accesibleTableOrViews[target]; !ok {
+			if _, ok := accessibleTableOrViews[target]; !ok {
 				responseErr(w, ErrAccessRestricted)
 				return
 			}
