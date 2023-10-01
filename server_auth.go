@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/golang-jwt/jwt"
@@ -66,6 +65,8 @@ func (opts *ServerAuthOptions) createAuthMiddleware(
 
 	switch {
 	case opts.RSAPublicKeyFilePath != "":
+		keyReader := readFileWithStatCache(opts.RSAPublicKeyFilePath)
+
 		jwtParser.ValidMethods = append(
 			jwtParser.ValidMethods,
 			jwt.SigningMethodRS256.Name,
@@ -73,7 +74,7 @@ func (opts *ServerAuthOptions) createAuthMiddleware(
 			jwt.SigningMethodRS512.Name,
 		)
 		jwtKeyFunc = func(t *jwt.Token) (interface{}, error) {
-			b, err := os.ReadFile(opts.RSAPublicKeyFilePath)
+			b, err := keyReader()
 			if err != nil {
 				return nil, err
 			}
@@ -85,6 +86,8 @@ func (opts *ServerAuthOptions) createAuthMiddleware(
 			return v, nil
 		}
 	case opts.TokenFilePath != "":
+		tokenReader := readFileWithStatCache(opts.TokenFilePath)
+
 		jwtParser.ValidMethods = append(
 			jwtParser.ValidMethods,
 			jwt.SigningMethodHS256.Name,
@@ -92,7 +95,7 @@ func (opts *ServerAuthOptions) createAuthMiddleware(
 			jwt.SigningMethodHS512.Name,
 		)
 		jwtKeyFunc = func(t *jwt.Token) (interface{}, error) {
-			b, err := os.ReadFile(opts.TokenFilePath)
+			b, err := tokenReader()
 			if err != nil {
 				return nil, err
 			}
