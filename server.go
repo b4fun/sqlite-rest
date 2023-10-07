@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/go-json-experiment/json"
 	"github.com/go-logr/logr"
 	"github.com/jmoiron/sqlx"
 	"github.com/spf13/cobra"
@@ -151,8 +151,7 @@ func (server *dbServer) responseError(w http.ResponseWriter, err error) {
 func (server *dbServer) responseData(w http.ResponseWriter, data interface{}, statusCode int) {
 	w.WriteHeader(statusCode)
 
-	enc := json.NewEncoder(w)
-	if encodeErr := enc.Encode(data); encodeErr != nil {
+	if encodeErr := json.MarshalWrite(w, data); encodeErr != nil {
 		server.logger.Error(encodeErr, "failed to write response")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
