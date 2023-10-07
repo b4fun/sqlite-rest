@@ -6,6 +6,7 @@ on:
   # NOTE: this is for testing the workflow
   push:
     branches: ["release-test", "main"]
+  workflow_dispatch: {}
 
 env:
   REGISTRY: ghcr.io
