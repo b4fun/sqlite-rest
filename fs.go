@@ -9,7 +9,7 @@ func readFileWithStatCache(file string) func() ([]byte, error) {
 	mu := new(sync.RWMutex)
 	var (
 		lastReadContent []byte
-		lastStat os.FileInfo
+		lastStat        os.FileInfo
 	)
 
 	fast := func() (bool, []byte, error) {

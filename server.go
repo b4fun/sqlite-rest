@@ -83,6 +83,8 @@ func NewServer(opts *ServerOptions) (*dbServer, error) {
 		logger: opts.Logger.WithName("db-server"),
 		server: &http.Server{
 			Addr: opts.Addr,
+			// TODO: make it configurable
+			ReadHeaderTimeout: 5 * time.Second,
 		},
 		queryer: opts.Queryer,
 		execer:  opts.Execer,
@@ -137,6 +139,11 @@ func (server *dbServer) Start(done <-chan struct{}) {
 	server.server.Shutdown(shutdownCtx)
 }
 
+func (server *dbServer) responseHeader(w http.ResponseWriter, statusCode int) {
+	w.Header().Set("Server", ServerVersion)
+	w.WriteHeader(statusCode)
+}
+
 func (server *dbServer) responseError(w http.ResponseWriter, err error) {
 	var serverError *ServerError
 	switch {
@@ -149,7 +156,7 @@ func (server *dbServer) responseError(w http.ResponseWriter, err error) {
 }
 
 func (server *dbServer) responseData(w http.ResponseWriter, data interface{}, statusCode int) {
-	w.WriteHeader(statusCode)
+	server.responseHeader(w, statusCode)
 
 	enc := json.NewEncoder(w)
 	if encodeErr := enc.Encode(data); encodeErr != nil {
@@ -160,7 +167,7 @@ func (server *dbServer) responseData(w http.ResponseWriter, data interface{}, st
 }
 
 func (server *dbServer) responseEmptyBody(w http.ResponseWriter, statusCode int) {
-	w.WriteHeader(statusCode)
+	server.responseHeader(w, statusCode)
 }
 
 func (server *dbServer) handleQueryTableOrView(
