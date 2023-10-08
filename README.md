@@ -8,7 +8,7 @@
 Serve a RESTful API from any SQLite database
 </h4>
 
-**sqlite-rest** is similar to [PostgREST][postgrest], but for [SQLite][sqlite]. It's a standalone webs server that adds a RESTful API to any SQLite database.
+**sqlite-rest** is similar to [PostgREST][postgrest], but for [SQLite][sqlite]. It's a standalone web server that adds a RESTful API to any SQLite database.
 
 [PostgREST]: https://postgrest.org/en/stable/
 [SQLite]: https://www.sqlite.org/
