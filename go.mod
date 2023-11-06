@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/go-chi/cors v1.2.1
-	github.com/go-logr/logr v1.2.4
+	github.com/go-logr/logr v1.3.0
 	github.com/go-logr/zapr v1.2.4
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/golang-migrate/migrate/v4 v4.16.2
@@ -17,7 +17,7 @@ require (
 	github.com/stretchr/testify v1.8.4
 	github.com/supabase/postgrest-go v0.0.7
 	go.uber.org/zap v1.26.0
-	k8s.io/klog/v2 v2.100.1
+	k8s.io/klog/v2 v2.110.1
 )
 
 require (
