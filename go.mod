@@ -10,7 +10,7 @@ require (
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/golang-migrate/migrate/v4 v4.17.1
 	github.com/jmoiron/sqlx v1.3.5
-	github.com/mattn/go-sqlite3 v1.14.19
+	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/prometheus/client_golang v1.19.0
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
