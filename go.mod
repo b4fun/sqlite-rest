@@ -17,7 +17,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/supabase/postgrest-go v0.0.7
 	go.uber.org/zap v1.27.0
-	k8s.io/klog/v2 v2.120.1
+	k8s.io/klog/v2 v2.130.0
 )
 
 require (
