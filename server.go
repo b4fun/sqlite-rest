@@ -140,9 +140,12 @@ func NewServer(opts *ServerOptions) (*dbServer, error) {
 
 func (server *dbServer) Start(done <-chan struct{}) {
 	if server.socket != "" {
-		if err := os.MkdirAll(filepath.Dir(server.socket), 0755); err != nil {
-			server.logger.Error(err, "failed to ensure unix socket directory", "socket", server.socket)
-			return
+		sockDir := filepath.Dir(server.socket)
+		if sockDir != "" && sockDir != "." {
+			if err := os.MkdirAll(sockDir, 0755); err != nil {
+				server.logger.Error(err, "failed to ensure unix socket directory", "socket", server.socket)
+				return
+			}
 		}
 
 		if err := os.RemoveAll(server.socket); err != nil {
@@ -177,10 +180,6 @@ func (server *dbServer) Start(done <-chan struct{}) {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	server.server.Shutdown(shutdownCtx)
-
-	if server.listener != nil {
-		server.listener.Close()
-	}
 
 	if server.socket != "" {
 		if err := os.Remove(server.socket); err != nil && !errors.Is(err, os.ErrNotExist) {

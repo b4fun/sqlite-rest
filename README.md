@@ -54,7 +54,7 @@ $ sqlite3 bookstore.sqlite3 < examples/bookstore/data.sql
 ```
 $ echo -n "topsecret" > test.token
 $ sqlite-rest serve --auth-token-file test.token --security-allow-table books --db-dsn ./bookstore.sqlite3
-{"level":"info","ts":1672528510.825417,"logger":"db-server","caller":"sqlite-rest/server.go:121","msg":"server started","addr":":8080"}
+{"level":"info","ts":1672528510.825417,"logger":"db-server","msg":"server started","addr":":8080"}
 ... <omitted logs>
 ```
 
@@ -62,7 +62,7 @@ $ sqlite-rest serve --auth-token-file test.token --security-allow-table books --
 
 ```
 $ sqlite-rest serve --auth-token-file test.token --security-allow-table books --db-dsn ./bookstore.sqlite3 --http-socket /tmp/sqlite-rest.sock
-{"level":"info","ts":1672528510.825417,"logger":"db-server","caller":"sqlite-rest/server.go:121","msg":"server started","socket":"/tmp/sqlite-rest.sock"}
+{"level":"info","ts":1672528510.825417,"logger":"db-server","msg":"server started","socket":"/tmp/sqlite-rest.sock"}
 ... <omitted logs>
 ```
 

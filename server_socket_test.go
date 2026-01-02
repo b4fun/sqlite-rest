@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"os"
@@ -51,7 +52,11 @@ func TestServerWithUnixSocket(t *testing.T) {
 	}
 
 	done := make(chan struct{})
-	go server.Start(done)
+	serverDone := make(chan struct{})
+	go func() {
+		server.Start(done)
+		close(serverDone)
+	}()
 
 	assert.Eventually(t, func() bool {
 		_, err := os.Stat(socketPath)
@@ -87,4 +92,17 @@ func TestServerWithUnixSocket(t *testing.T) {
 	assert.EqualValues(t, 1, rows[0]["id"])
 
 	close(done)
+	assert.Eventually(t, func() bool {
+		select {
+		case <-serverDone:
+			return true
+		default:
+			return false
+		}
+	}, 2*time.Second, 50*time.Millisecond)
+
+	assert.Eventually(t, func() bool {
+		_, err := os.Stat(socketPath)
+		return errors.Is(err, os.ErrNotExist)
+	}, 5*time.Second, 100*time.Millisecond)
 }
