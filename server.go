@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -27,6 +29,7 @@ const (
 type ServerOptions struct {
 	Logger          logr.Logger
 	Addr            string
+	SocketPath      string
 	AuthOptions     ServerAuthOptions
 	SecurityOptions ServerSecurityOptions
 	Queryer         sqlx.QueryerContext
@@ -35,6 +38,7 @@ type ServerOptions struct {
 
 func (opts *ServerOptions) bindCLIFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&opts.Addr, "http-addr", ":8080", "server listen address")
+	fs.StringVar(&opts.SocketPath, "http-socket", "", "server listen unix socket path. If set, http-addr will be ignored")
 
 	opts.AuthOptions.bindCLIFlags(fs)
 	opts.SecurityOptions.bindCLIFlags(fs)
@@ -52,7 +56,11 @@ func (opts *ServerOptions) defaults() error {
 		opts.Logger = logr.Discard()
 	}
 
-	if opts.Addr == "" {
+	if opts.SocketPath != "" {
+		opts.Addr = ""
+	}
+
+	if opts.Addr == "" && opts.SocketPath == "" {
 		opts.Addr = ":8080"
 	}
 
@@ -68,10 +76,12 @@ func (opts *ServerOptions) defaults() error {
 }
 
 type dbServer struct {
-	logger  logr.Logger
-	server  *http.Server
-	queryer sqlx.QueryerContext
-	execer  sqlx.ExecerContext
+	logger   logr.Logger
+	server   *http.Server
+	listener net.Listener
+	socket   string
+	queryer  sqlx.QueryerContext
+	execer   sqlx.ExecerContext
 }
 
 func NewServer(opts *ServerOptions) (*dbServer, error) {
@@ -86,6 +96,7 @@ func NewServer(opts *ServerOptions) (*dbServer, error) {
 			// TODO: make it configurable
 			ReadHeaderTimeout: 5 * time.Second,
 		},
+		socket:  opts.SocketPath,
 		queryer: opts.Queryer,
 		execer:  opts.Execer,
 	}
@@ -128,15 +139,54 @@ func NewServer(opts *ServerOptions) (*dbServer, error) {
 }
 
 func (server *dbServer) Start(done <-chan struct{}) {
-	go server.server.ListenAndServe()
+	if server.socket != "" {
+		if err := os.MkdirAll(filepath.Dir(server.socket), 0755); err != nil {
+			server.logger.Error(err, "failed to ensure unix socket directory", "socket", server.socket)
+			return
+		}
 
-	server.logger.Info("server started", "addr", server.server.Addr)
+		if err := os.RemoveAll(server.socket); err != nil {
+			server.logger.Error(err, "failed to remove stale unix socket", "socket", server.socket)
+			return
+		}
+
+		l, err := net.Listen("unix", server.socket)
+		if err != nil {
+			server.logger.Error(err, "failed to listen on unix socket", "socket", server.socket)
+			return
+		}
+		server.listener = l
+
+		go server.server.Serve(l)
+		server.logger.Info("server started", "socket", server.socket)
+	} else {
+		l, err := net.Listen("tcp", server.server.Addr)
+		if err != nil {
+			server.logger.Error(err, "failed to listen on tcp address", "addr", server.server.Addr)
+			return
+		}
+		server.listener = l
+
+		go server.server.Serve(l)
+		server.logger.Info("server started", "addr", server.server.Addr)
+	}
+
 	<-done
 
 	server.logger.Info("shutting down server")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	server.server.Shutdown(shutdownCtx)
+
+	if server.listener != nil {
+		server.listener.Close()
+	}
+
+	if server.socket != "" {
+		if err := os.Remove(server.socket); err != nil && !errors.Is(err, os.ErrNotExist) {
+			server.logger.Error(err, "failed to clean up unix socket", "socket", server.socket)
+		}
+	}
 }
 
 func (server *dbServer) responseHeader(w http.ResponseWriter, statusCode int) {

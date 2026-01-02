@@ -58,6 +58,14 @@ $ sqlite-rest serve --auth-token-file test.token --security-allow-table books --
 ... <omitted logs>
 ```
 
+### Start server with Unix domain socket
+
+```
+$ sqlite-rest serve --auth-token-file test.token --security-allow-table books --db-dsn ./bookstore.sqlite3 --http-socket /tmp/sqlite-rest.sock
+{"level":"info","ts":1672528510.825417,"logger":"db-server","caller":"sqlite-rest/server.go:121","msg":"server started","socket":"/tmp/sqlite-rest.sock"}
+... <omitted logs>
+```
+
 ### Generate authentication token
 
 **NOTE: the following steps create a sample token for testing only, please use a strong password in production.**
