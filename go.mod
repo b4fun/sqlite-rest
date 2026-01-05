@@ -13,7 +13,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/cobra v1.9.1
-	github.com/spf13/pflag v1.0.6
+	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
 	github.com/supabase/postgrest-go v0.0.7
 	go.uber.org/zap v1.27.0
