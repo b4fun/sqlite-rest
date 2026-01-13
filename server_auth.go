@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/spf13/pflag"
 )
 
@@ -52,11 +52,7 @@ func (opts *ServerAuthOptions) createAuthMiddleware(
 		}
 	}
 
-	jwtParser := &jwt.Parser{
-		ValidMethods:         []string{},
-		SkipClaimsValidation: false,
-	}
-
+	var validMethods []string
 	jwtKeyFunc := jwt.Keyfunc(func(t *jwt.Token) (interface{}, error) {
 		return nil, fmt.Errorf("invalid token")
 	})
@@ -67,12 +63,11 @@ func (opts *ServerAuthOptions) createAuthMiddleware(
 	case opts.RSAPublicKeyFilePath != "":
 		keyReader := readFileWithStatCache(opts.RSAPublicKeyFilePath)
 
-		jwtParser.ValidMethods = append(
-			jwtParser.ValidMethods,
+		validMethods = []string{
 			jwt.SigningMethodRS256.Name,
 			jwt.SigningMethodRS384.Name,
 			jwt.SigningMethodRS512.Name,
-		)
+		}
 		jwtKeyFunc = func(t *jwt.Token) (interface{}, error) {
 			b, err := keyReader()
 			if err != nil {
@@ -88,12 +83,11 @@ func (opts *ServerAuthOptions) createAuthMiddleware(
 	case opts.TokenFilePath != "":
 		tokenReader := readFileWithStatCache(opts.TokenFilePath)
 
-		jwtParser.ValidMethods = append(
-			jwtParser.ValidMethods,
+		validMethods = []string{
 			jwt.SigningMethodHS256.Name,
 			jwt.SigningMethodHS384.Name,
 			jwt.SigningMethodHS512.Name,
-		)
+		}
 		jwtKeyFunc = func(t *jwt.Token) (interface{}, error) {
 			b, err := tokenReader()
 			if err != nil {
@@ -103,6 +97,8 @@ func (opts *ServerAuthOptions) createAuthMiddleware(
 			return b, nil
 		}
 	}
+
+	jwtParser := jwt.NewParser(jwt.WithValidMethods(validMethods))
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

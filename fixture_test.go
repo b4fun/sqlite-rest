@@ -16,7 +16,7 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 	"github.com/supabase/postgrest-go"
@@ -173,7 +173,7 @@ func createTestContextWithHMACTokenAuth(t testing.TB) *TestContext {
 		return nil
 	}
 
-	authToken := jwt.NewWithClaims(jwt.SigningMethodHS256, &jwt.StandardClaims{})
+	authToken := jwt.NewWithClaims(jwt.SigningMethodHS256, &jwt.RegisteredClaims{})
 	authTokenString, err := authToken.SignedString(testToken)
 	if err != nil {
 		t.Fatal(err)
@@ -249,7 +249,7 @@ func createTestContextWithRSATokenAuth(t testing.TB) *TestContext {
 		return nil
 	}
 
-	authToken := jwt.NewWithClaims(jwt.SigningMethodRS256, &jwt.StandardClaims{})
+	authToken := jwt.NewWithClaims(jwt.SigningMethodRS256, &jwt.RegisteredClaims{})
 	authTokenString, err := authToken.SignedString(privateKey)
 	if err != nil {
 		t.Fatal(err)
