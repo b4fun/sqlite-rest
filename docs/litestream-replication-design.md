@@ -31,7 +31,7 @@
 
 1. **Configuration** (new `ReplicationOptions`):
    - `--replication-enabled` (bool, default false).
-- `--replication-replica-urls` (comma-separated, required when enabled; supports Litestream URLs like `s3://bucket/path` or `file:///...` for local testing; initial implementation can accept a single entry).
+- `--replication-replica-url` (string, required when enabled; supports Litestream URLs like `s3://bucket/path` or `file:///...` for local testing; multi-replica support would likely rename this to `--replication-replica-urls` or move to a config file).
    - `--replication-snapshot-interval` / `--replication-retention` (optional tuning, passed through to Litestream).
    - `--replication-restore-from` (optional override to restore from a different replica URL).
    - Env var mirrors for container use (e.g., `SQLITEREST_REPLICATION_ENABLED`, etc.).
@@ -63,7 +63,7 @@
 
 - **S3**: use Litestream’s S3 replica driver; accept AWS creds via standard env vars (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`) and allow custom endpoint for MinIO.
 - **File**: support `file://` URLs for local/dev validation.
-- Future: allow multiple replicas via a single comma-separated flag (e.g., `--replication-replica-urls`) or config file entry instead of repeated flags; initial scope is a single replica to minimize surface area.
+- Future: allow multiple replicas by expanding the flag surface (e.g., adding `--replication-replica-urls` or a config file section); initial scope is a single replica to minimize surface area.
 
 ### Lifecycle integration sketch
 
@@ -75,6 +75,8 @@ go replicator.Start(ctx) // ctx tied to serve command cancellation
 go metricsServer.Start(ctx)
 go pprofServer.Start(ctx)
 server.Start(ctx.Done())
+// Error handling: monitor replicator error channel/state changes; log and increment metrics,
+// and optionally trigger process shutdown if replication is marked as required.
 ```
 
 ### Testing strategy (future implementation)
