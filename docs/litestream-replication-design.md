@@ -32,9 +32,8 @@
 1. **Configuration** (new `ReplicationOptions`):
    - `--replication-enabled` (bool, default false).
    - `--replication-config` (string, path to Litestream YAML config; preferred path to keep sqlite-rest changes minimal and delegate detailed tuning like snapshot/retention/replicas to Litestream).
-   - `--replication-restore-from` (optional override to restore from a different replica URL; if omitted, use the primary replica from the Litestream config).
    - Env var mirrors for container use (e.g., `SQLITEREST_REPLICATION_ENABLED`, `SQLITEREST_REPLICATION_CONFIG`, etc.).
-   - Recommended CLI UX: keep flags minimal (`--replication-enabled`, `--replication-config`, optional `--replication-restore-from`) and leave all other Litestream knobs to the config file.
+   - Recommended CLI UX: keep flags minimal (`--replication-enabled`, `--replication-config`) and leave all other Litestream knobs to the config file.
 
 2. **Restore before serving**:
    - If enabled, run a Litestream restore for the configured database path **before** opening the DB handle used by `sqlite-rest`.
