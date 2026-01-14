@@ -67,7 +67,7 @@
 
 ### Lifecycle integration sketch
 
-```
+```go
 restoreIfNeeded(ctx, dbPath, restoreURL, restoreOpts)
 db := openDB(...)
 replicator := newReplicator(dbPath, replicaURL, tuneOpts)
