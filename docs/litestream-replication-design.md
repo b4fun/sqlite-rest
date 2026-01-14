@@ -63,7 +63,7 @@
 
 - **S3**: use Litestream’s S3 replica driver; accept AWS creds via standard env vars (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`) and allow custom endpoint for MinIO.
 - **File**: support `file://` URLs for local/dev validation.
-- Future: allow multiple replicas by accepting repeated `--replication-replica-url` flags; initial scope is a single replica to minimize surface area.
+- Future: allow multiple replicas via a single comma-separated flag (e.g., `--replication-replica-urls`) or config file entry instead of repeated flags; initial scope is a single replica to minimize surface area.
 
 ### Lifecycle integration sketch
 
