@@ -33,16 +33,13 @@
    - `--replication-enabled` (bool, default false).
    - `--replication-config` (string, path to Litestream YAML config; preferred path to keep sqlite-rest changes minimal and delegate detailed tuning like snapshot/retention/replicas to Litestream).
    - `--replication-restore-from` (optional override to restore from a different replica URL; if omitted, use the primary replica from the Litestream config).
-   - `--replication-restore-interval` (duration, default `0` meaning latest; limits how far back to search for a snapshot when restoring).
-   - `--replication-restore-lag` (duration, default `0` meaning no lag allowed; used during startup restore decisions to tolerate a small amount of staleness between the local DB and the replica before forcing a restore).
-   - `--replication-allow-degraded` (bool, default false; when false, runtime replication errors or failed restores will stop the process).
    - Env var mirrors for container use (e.g., `SQLITEREST_REPLICATION_ENABLED`, `SQLITEREST_REPLICATION_CONFIG`, etc.).
-   - Recommended CLI UX: keep flags minimal (`--replication-enabled`, `--replication-config`, optional `--replication-restore-from` and `--replication-allow-degraded`) and leave all other Litestream knobs to the config file.
+   - Recommended CLI UX: keep flags minimal (`--replication-enabled`, `--replication-config`, optional `--replication-restore-from`) and leave all other Litestream knobs to the config file.
 
 2. **Restore before serving**:
    - If enabled, run a Litestream restore for the configured database path **before** opening the DB handle used by `sqlite-rest`.
-   - Restore should be idempotent (skip when the local DB is already ahead) and respect a configurable `--replication-restore-interval` / `--replication-restore-lag` window to avoid long restores on healthy primaries.
-   - Divergence handling: if the local WAL lineage differs from the remote replica (e.g., split-brain), default to fail-fast and require operator action (e.g., force-restore from the chosen replica or re-seed) to avoid serving inconsistent data. An explicit `--replication-allow-degraded` plus a force-restore knob can opt into overwriting local state.
+   - Restore should be idempotent (skip when the local DB is already ahead) and rely on Litestream config knobs (snapshot interval/retention/restore lag) for tuning.
+   - Divergence handling: if the local WAL lineage differs from the remote replica (e.g., split-brain), default to fail-fast and require operator action (e.g., force-restore from the chosen replica or re-seed) to avoid serving inconsistent data.
 
 3. **Start replication alongside the server**:
    - After opening the DB (once restore is done), create a Litestream replicator instance bound to the same database path and replica URL.
@@ -79,10 +76,8 @@ go replicator.Start(ctx) // ctx tied to serve command cancellation
 go metricsServer.Start(ctx)
 go pprofServer.Start(ctx)
 server.Start(ctx.Done())
-// Error handling: monitor replicator error channel/state changes; log and increment metrics,
-// and optionally trigger process shutdown if replication is marked as required (i.e., when
-// `--replication-allow-degraded` is false). On error channel receive, cancel the shared context
-// to shut down servers when degraded starts are disallowed.
+// Error handling: monitor replicator error channel/state changes; log and increment metrics.
+// On error channel receive, cancel the shared context to shut down servers (fail-fast default).
 ```
 
 ### Testing strategy (future implementation)
@@ -99,8 +94,6 @@ server.Start(ctx.Done())
 
 ## Open questions
 
-- Should we expose multiple replicas at launch or keep single-replica until requested?
-- How strict should startup be when replication is enabled but the remote is unreachable? **Recommendation:** fail fast by default to avoid running without configured durability, with an explicit `--replication-allow-degraded` escape hatch if operators need to accept the data-loss risk.
 - What are the sensible defaults for snapshot/retention to balance durability and cost?
 
 ## Implementation plan (for future PRs)
