@@ -63,7 +63,7 @@
 
 ### Configuration mapping
 
-- **S3**: use Litestream’s S3 replica driver; accept AWS creds via standard env vars (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`) and allow custom endpoint for MinIO.
+- **S3**: use Litestream’s S3 replica driver; accept AWS creds via standard env vars (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`) and allow custom endpoint for MinIO. Document minimal IAM needs (typically `s3:PutObject`, `s3:GetObject`, `s3:ListBucket`, and `s3:DeleteObject` for the configured prefix) so operators can keep replication credentials least-privileged.
 - **File**: support `file://` URLs for local/dev validation.
 - Future: allow multiple replicas by expanding the flag surface (e.g., adding `--replication-replica-urls` or a config file section); initial scope is a single replica to minimize surface area.
 
@@ -97,7 +97,7 @@ server.Start(ctx.Done())
 ## Open questions
 
 - Should we expose multiple replicas at launch or keep single-replica until requested?
-- How strict should startup be when replication is enabled but the remote is unreachable? **Recommendation:** fail fast by default to avoid running without configured durability, with an explicit `--replication-allow-degraded-start` escape hatch if operators need to accept the data-loss risk.
+- How strict should startup be when replication is enabled but the remote is unreachable? **Recommendation:** fail fast by default to avoid running without configured durability, with an explicit `--replication-allow-degraded` escape hatch if operators need to accept the data-loss risk.
 - What are the sensible defaults for snapshot/retention to balance durability and cost?
 
 ## Implementation plan (for future PRs)
