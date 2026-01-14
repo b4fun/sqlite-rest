@@ -31,16 +31,18 @@
 
 1. **Configuration** (new `ReplicationOptions`):
    - `--replication-enabled` (bool, default false).
-   - `--replication-replica-url` (string, required when enabled; supports Litestream URLs like `s3://bucket/path` or `file:///...` for local testing; multi-replica support would likely rename this to `--replication-replica-urls` or move to a config file).
-   - `--replication-snapshot-interval` / `--replication-retention` (optional tuning, passed through to Litestream).
-   - `--replication-restore-from` (optional override to restore from a different replica URL).
+   - `--replication-config` (string, path to Litestream YAML config; preferred path to keep sqlite-rest changes minimal and delegate detailed tuning like snapshot/retention/replicas to Litestream).
+   - `--replication-restore-from` (optional override to restore from a different replica URL; if omitted, use the primary replica from the Litestream config).
    - `--replication-restore-interval` (duration, default `0` meaning latest; limits how far back to search for a snapshot when restoring).
    - `--replication-restore-lag` (duration, default `0` meaning no lag allowed; used during startup restore decisions to tolerate a small amount of staleness between the local DB and the replica before forcing a restore).
-   - Env var mirrors for container use (e.g., `SQLITEREST_REPLICATION_ENABLED`, etc.).
+   - `--replication-allow-degraded` (bool, default false; when false, runtime replication errors or failed restores will stop the process).
+   - Env var mirrors for container use (e.g., `SQLITEREST_REPLICATION_ENABLED`, `SQLITEREST_REPLICATION_CONFIG`, etc.).
+   - Recommended CLI UX: keep flags minimal (`--replication-enabled`, `--replication-config`, optional `--replication-restore-from` and `--replication-allow-degraded`) and leave all other Litestream knobs to the config file.
 
 2. **Restore before serving**:
    - If enabled, run a Litestream restore for the configured database path **before** opening the DB handle used by `sqlite-rest`.
    - Restore should be idempotent (skip when the local DB is already ahead) and respect a configurable `--replication-restore-interval` / `--replication-restore-lag` window to avoid long restores on healthy primaries.
+   - Divergence handling: if the local WAL lineage differs from the remote replica (e.g., split-brain), default to fail-fast and require operator action (e.g., force-restore from the chosen replica or re-seed) to avoid serving inconsistent data. An explicit `--replication-allow-degraded` plus a force-restore knob can opt into overwriting local state.
 
 3. **Start replication alongside the server**:
    - After opening the DB (once restore is done), create a Litestream replicator instance bound to the same database path and replica URL.
@@ -65,7 +67,7 @@
 
 - **S3**: use Litestream’s S3 replica driver; accept AWS creds via standard env vars (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`) and allow custom endpoint for MinIO. Document minimal IAM needs (typically `s3:PutObject`, `s3:GetObject`, `s3:ListBucket`, and `s3:DeleteObject` for the configured prefix) so operators can keep replication credentials least-privileged.
 - **File**: support `file://` URLs for local/dev validation.
-- Future: allow multiple replicas by expanding the flag surface (e.g., adding `--replication-replica-urls` or a config file section); initial scope is a single replica to minimize surface area.
+- Future: allow multiple replicas (multiple remote destinations for the same SQLite DB) by expanding the config surface (e.g., via Litestream config file); initial scope is a single replica to minimize surface area.
 
 ### Lifecycle integration sketch
 
@@ -92,7 +94,7 @@ server.Start(ctx.Done())
 
 ## Migration & compatibility
 
-- Replication is opt-in; existing CLI invocations keep current behavior.
+- Replication is opt-in and disabled by default; existing CLI invocations keep current behavior. Detailed replication tuning stays in the Litestream config file to minimize sqlite-rest surface changes.
 - Docker image remains the same; enabling replication requires supplying new flags/env and storage credentials.
 
 ## Open questions
