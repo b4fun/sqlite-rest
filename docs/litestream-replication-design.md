@@ -92,7 +92,7 @@ server.Start(ctx.Done())
 ## Open questions
 
 - Should we expose multiple replicas at launch or keep single-replica until requested?
-- How strict should startup be when replication is enabled but the remote is unreachable (fail fast vs. warn and continue)?
+- How strict should startup be when replication is enabled but the remote is unreachable? **Recommendation:** fail fast by default to avoid running without configured durability, with an explicit `--replication-allow-degraded-start` escape hatch if operators need to accept the data-loss risk.
 - What are the sensible defaults for snapshot/retention to balance durability and cost?
 
 ## Implementation plan (for future PRs)
