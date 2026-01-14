@@ -31,7 +31,7 @@
 
 1. **Configuration** (new `ReplicationOptions`):
    - `--replication-enabled` (bool, default false).
-   - `--replication-replica-url` (string, required when enabled; supports Litestream URLs like `s3://bucket/path` or `file:///...` for local testing).
+- `--replication-replica-urls` (comma-separated, required when enabled; supports Litestream URLs like `s3://bucket/path` or `file:///...` for local testing; initial implementation can accept a single entry).
    - `--replication-snapshot-interval` / `--replication-retention` (optional tuning, passed through to Litestream).
    - `--replication-restore-from` (optional override to restore from a different replica URL).
    - Env var mirrors for container use (e.g., `SQLITEREST_REPLICATION_ENABLED`, etc.).
