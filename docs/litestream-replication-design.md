@@ -35,7 +35,7 @@
    - `--replication-snapshot-interval` / `--replication-retention` (optional tuning, passed through to Litestream).
    - `--replication-restore-from` (optional override to restore from a different replica URL).
    - `--replication-restore-interval` (duration, default `0` meaning latest; limits how far back to search for a snapshot when restoring).
-   - `--replication-restore-lag` (duration, default `0` meaning no lag allowed; can be set to tolerate small staleness before triggering a restore).
+   - `--replication-restore-lag` (duration, default `0` meaning no lag allowed; used during startup restore decisions to tolerate a small amount of staleness between the local DB and the replica before forcing a restore).
    - Env var mirrors for container use (e.g., `SQLITEREST_REPLICATION_ENABLED`, etc.).
 
 2. **Restore before serving**:
@@ -78,8 +78,9 @@ go metricsServer.Start(ctx)
 go pprofServer.Start(ctx)
 server.Start(ctx.Done())
 // Error handling: monitor replicator error channel/state changes; log and increment metrics,
-// and optionally trigger process shutdown if replication is marked as required. On error channel
-// receive, cancel the shared context to shut down servers when degraded starts are disallowed.
+// and optionally trigger process shutdown if replication is marked as required (i.e., when
+// `--replication-allow-degraded` is false). On error channel receive, cancel the shared context
+// to shut down servers when degraded starts are disallowed.
 ```
 
 ### Testing strategy (future implementation)
